@@ -23,7 +23,7 @@ class ComputeOpticaldepth:
         self.transitions = self.specparams["ionparams"]["transitionparams"]
         
         #
-        self.constants  = Phys.ReadPhys()
+        self.constants  = specwizard.Phys.ReadPhys()
         
         self.ThermEff   = self.specparams['ODParams']['ThermalEffectsOff']
         self.PecVelEff  = self.specparams['ODParams']['PecVelEffectsOff']
@@ -172,7 +172,7 @@ class ComputeOpticaldepth:
                 spectra[ion]["Densities"]       = spectrum["Densities"]
                 spectra[ion]["Velocities"]      = spectrum["Velocities"]
                 spectra[ion]["Temperatures"]    = spectrum["Temperatures"]
-                spectra[ion]["TotalIonColumnDensity"] = spectrum["TotalIonColumnDensity"]
+                spectra[ion]["IonColumnDensity"] = spectrum["IonColumnDensity"]
                 spectra[ion]["Mass"]            = weight
                 spectra[ion]["lambda0"]         = lambda0
                 spectra[ion]["f-value"]         = f_value
@@ -200,11 +200,9 @@ class ComputeOpticaldepth:
             
         # convert from density to column density
         ioncolumns = nions * pixel                                           # in ions/cm^2
-
-        total_column_density = np.sum(ioncolumns)                            # in ions/cm^2
         dunit        = self.SetUnit(vardescription="Total ion column density", 
                                              Lunit=1.0, aFact=0.0, hFact=0.0)
-        total_column_density    = {'Value': total_column_density, "Info": dunit}
+        column_density    = {'Value': ioncolumns, "Info": dunit} # in ions/cm^2
 
         # compute b-parameter
         bions_kms = np.sqrt(2*self.constants["kB"]*Tions/weight) / 1e5
@@ -243,7 +241,7 @@ class ComputeOpticaldepth:
         tauunit      = self.SetUnit(vardescription="Ionic optical depth", 
                                              Lunit=1, aFact=0.0, hFact=0.0)
         tau          = {'Value':tau, 'Info':tauunit}
-        return {'Optical depths':tau, 'Densities': densities, 'Velocities': velocities, 'Temperatures': temperatures, 'TotalIonColumnDensity':total_column_density}
+        return {'Optical depths':tau, 'Densities': densities, 'Velocities': velocities, 'Temperatures': temperatures, 'IonColumnDensity':column_density}
 
     def CGSunit(self, header, variable):
         ''' 
