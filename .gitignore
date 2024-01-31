@@ -21,3 +21,4 @@
 /build/
 /.ipynb_checkpoints/
 /MANIFEST.in
+/specwizard/VpFit/atom_dat.hdf5
