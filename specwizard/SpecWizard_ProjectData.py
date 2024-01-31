@@ -151,6 +151,7 @@ class SightLineProjection:
         rho_tot['Densities']     = {'Value': np.zeros(npix), 'Info': particles['Densities']['Info']}      # density
         rho_tot['Velocities']    = {'Value': np.zeros(npix), 'Info': particles['Velocities']['Info']}     # density-weighted peculiar velocity
         rho_tot['Temperatures']  = {'Value': np.zeros(npix), 'Info': particles['Temperatures']['Info']}   # density-weigthed temperatue
+        rho_tot['Metallicities'] = {'Value': np.zeros(npix), 'Info': particles['Metallicities']['Info']}  # density-weigthed metallicity
 
         # element densities
         rho_element             = {}
@@ -311,6 +312,7 @@ class SightLineProjection:
             rho_tot['Densities']['Value'][intz]     += diff
             rho_tot['Velocities']['Value'][intz]    += diff * vz[i]
             rho_tot['Temperatures']['Value'][intz]  += diff * temperature[i]
+            rho_tot['Metallicities']['Value'][intz] += diff * Z[i]
 
             # Densities of elements
             for element in elementnames:
@@ -345,6 +347,7 @@ class SightLineProjection:
         mask = rho_tot['Densities']['Value'] > 0
         rho_tot['Velocities']['Value'][mask]   /= rho_tot['Densities']['Value'][mask]
         rho_tot['Temperatures']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
+        rho_tot['Metallicities']['Value'][mask]/= rho_tot['Densities']['Value'][mask]
         
         for element in elementnames:
             mask = rho_element[element]['Densities']['Value'] > 0
