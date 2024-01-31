@@ -2,15 +2,15 @@
 import numpy as np
 import scipy.interpolate as interpolate
 #
-from SpecWizard_Input import ReadData
-from SpecWizard_Elements import Elements
-from SpecWizard_IonizationBalance import IonizationBalance
-from SpecWizard_SplineInterpolation import ColumnTable
-from SpecWizard_SplineInterpolation import Bspline, TGauss
-from SpecWizard_IonTables_test import IonTables
+from specwizard.SpecWizard_Input import ReadData
+from specwizard.SpecWizard_Elements import Elements
+from specwizard.SpecWizard_IonizationBalance import IonizationBalance
+from specwizard.SpecWizard_SplineInterpolation import ColumnTable
+from specwizard.SpecWizard_SplineInterpolation import Bspline, TGauss
+from specwizard.SpecWizard_IonTables_test import IonTables
 #
-import Phys
-constants = Phys.ReadPhys()
+import specwizard.Phys
+constants = specwizard.Phys.ReadPhys()
 kernel = Bspline()
 kernel = TGauss()
 

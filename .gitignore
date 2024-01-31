@@ -15,4 +15,6 @@
 /specwizard/*_old.py
 /specwizard/*_test.py
 /specwizard/*_alotoffunctions.py
-
+/MANIFEST.in/
+/setup.py/
+/build/

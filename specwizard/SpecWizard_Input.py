@@ -1,13 +1,13 @@
 
 import numpy as np
-import Phys
+import specwizard.Phys
 import importlib
 import glob
-from SpecWizard_Elements import Elements
+from specwizard.SpecWizard_Elements import Elements
 import h5py
-from  reading_simulations import *
-Phys = importlib.reload(Phys)
-from SimulationInputKeys import get_simkeys
+from specwizard.reading_simulations import *
+Phys = importlib.reload(specwizard.Phys)
+from specwizard.SimulationInputKeys import get_simkeys
 
 # physical constants in cgs units
 constants  = Phys.ReadPhys()

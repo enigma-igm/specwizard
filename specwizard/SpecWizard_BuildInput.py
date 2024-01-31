@@ -5,8 +5,8 @@ import os
 import h5py
 import sys
 import numpy as np
-from SpecWizard_Elements import Elements
-from SpecWizard_IonTables import IonTables
+from specwizard.SpecWizard_Elements import Elements
+from specwizard.SpecWizard_IonTables import IonTables
 import yaml
 import traceback
 

@@ -1,12 +1,12 @@
 import importlib
 import numpy as np
-from SpecWizard_Elements import Elements
-import SpecWizard_Lines
+from specwizard.SpecWizard_Elements import Elements
+import specwizard.SpecWizard_Lines
 
-SpecWizard_Lines = importlib.reload(SpecWizard_Lines)
-from SpecWizard_Lines import Lines
-import Phys
-constants = Phys.ReadPhys()
+specwizard.SpecWizard_Lines = importlib.reload(specwizard.SpecWizard_Lines)
+from specwizard.SpecWizard_Lines import Lines
+import specwizard.Phys
+constants = specwizard.Phys.ReadPhys()
 #
 import scipy.interpolate as interpolate
 

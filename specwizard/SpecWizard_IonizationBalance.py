@@ -3,7 +3,7 @@ import importlib
 import numpy as np
 import re
 import mendeleev
-from SpecWizard_Elements import Elements
+from specwizard.SpecWizard_Elements import Elements
 import h5py
 import scipy.interpolate as interpolate
 

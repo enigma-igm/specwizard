@@ -1,7 +1,7 @@
 # %load SpecWizard_Lines_tom.py
 import numpy as np
-import Phys
-constants = Phys.ReadPhys()
+import specwizard.Phys
+constants = specwizard.Phys.ReadPhys()
 #
 from scipy.signal import convolve
 from scipy.special import erf

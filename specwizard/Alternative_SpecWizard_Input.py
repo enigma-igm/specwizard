@@ -1,14 +1,14 @@
 
 import numpy as np
-import Phys
+import specwizard.Phys
 import importlib
 import pyread_eagle as read_eagle
 import swiftsimio as sw
 import hydrangea as hy
-from SpecWizard_Elements import Elements
+from specwizard.SpecWizard_Elements import Elements
 import h5py
-Phys = importlib.reload(Phys)
-from SimulationInputKeys import get_simkeys
+Phys = importlib.reload(specwizard.Phys)
+from specwizard.SimulationInputKeys import get_simkeys
 
 # physical constants in cgs units
 constants  = Phys.ReadPhys()
