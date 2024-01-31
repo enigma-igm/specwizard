@@ -16,7 +16,8 @@
 /specwizard/*_test.py
 /specwizard/*_alotoffunctions.py
 /MANIFEST.in/
-/setup.py/
+/setup.py
+/specwizard/.idea/
 /build/
 /.ipynb_checkpoints/
 /MANIFEST.in
