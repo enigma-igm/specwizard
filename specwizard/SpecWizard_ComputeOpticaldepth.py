@@ -141,6 +141,19 @@ class ComputeOpticaldepth:
         return spectra
     
     def WrapSpectra(self,Ions,projection,sightparams,vel_mod=False,therm_mod=False ):
+        """
+            Wrapper for the MakeOpticaldepth method.
+
+            Inputs:
+                Ions (list): List of ions to include in the computed optical depths.
+                projection (dict): Dictionary containing the ion-weighted fields.
+                sightparams (dict): Dictionary containing sightline information.
+                vel_mod (bool): If True, set the peculiar velocities to zero.
+                therm_mod (bool): If True, set the temperatures to 0.1 K.
+
+            Returns:
+                spectra (dict): Dictionary containing the computed optical depths.
+        """
         header     = self.header
         spectra    = {}
         vel_kms    = sightparams['vel_kms']
