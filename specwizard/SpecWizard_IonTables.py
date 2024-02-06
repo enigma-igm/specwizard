@@ -215,20 +215,16 @@ class IonTables:
             ((table_z, table_LogTs, table_LognHs, table_LogZs), table) = self.ReadIonizationTable(ion=ion)
             # We divide by the Solar metallicity since the tables are in log10(Z/Zsol)
             Zsol       = 0.013371374
-            Z          /= Zsol
+            tmpZ          = np.copy(Z).astype('float64')/Zsol
             # The tables treat zero as log10(1e-50)
-            Z[Z==0.0]    = 1e-34
+            tmpZ[tmpZ==0.0]    = 1e-34
             TInterpol  = np.log10(temperature)
             Tinterpol  = self.SetLimitRange(TInterpol,table_LogTs.min(),table_LogTs.max())
             nHInterpol = np.log10(nH_density)
             nHInterpol  = self.SetLimitRange(nHInterpol,table_LognHs.min(),table_LognHs.max())
             zInterpol  = redshift
-            Zinterpol  = np.log10(Z)
+            Zinterpol  = np.log10(tmpZ)
             Zinterpol[Zinterpol==-34.00] = -50
             pts        = np.column_stack((zInterpol, TInterpol, Zinterpol, nHInterpol))
             result     = interpolate.interpn((table_z, table_LogTs, table_LogZs, table_LognHs), table, pts, method='linear', bounds_error=False, fill_value=None)
             return result
-        
-
-
-            return SimulationIonFractions    
