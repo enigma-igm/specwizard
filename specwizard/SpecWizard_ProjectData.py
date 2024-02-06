@@ -88,11 +88,11 @@ class SightLineProjection:
         ionizationbalance  = self.specparams["ionparams"]["IonizationBalance"]
         elementnames       = self.specparams["elementparams"]["ElementNames"]
         header             = sightlinedata["Header"] 
-        los_length         = sightinfo['ProjectionLength']
+        los_length         = sightinfo['ProjectionLength'] # fraction of domain
         
         
         boxkms = sightinfo["Boxkms"]["Value"]  # in km/s
-        box    = sightinfo["Box"]["Value"]     # in programme units
+        box    = sightinfo["Box"]["Value"]     # cMpc/h
         self.specparams['short-LOS']     = sightinfo['short-LOS']
         
         # compute extra properties for sightline
@@ -102,7 +102,7 @@ class SightLineProjection:
         npix    = np.int(sightkms / self.specparams["pixkms"]) + 1
         pixkms  = sightkms / npix
         sight   = box * los_length
-        pix     = sight / npix
+        pix     = sight / npix # in cMpc/h
         
         # Sight line properties
         # number of pixels of sight line and z-values of pixels
@@ -128,7 +128,7 @@ class SightLineProjection:
 
         # impact parameter in units of smoothing length. Note: we impose periodic boundary conditions if periodic=True.
         dx  = self.PeriodicDist(particles['Positions']['Value'][:,0] - proj0, box,self.periodic)*hinv  # off-set from sightline in x
-        dy  = self.PeriodicDist(particles['Positions']['Value'][:,1] - proj1, box,self.periodic)*hinv  # off-set from sightline in x
+        dy  = self.PeriodicDist(particles['Positions']['Value'][:,1] - proj1, box,self.periodic)*hinv  # off-set from sightline in y
         b   = np.sqrt(dx**2+dy**2)                                                         # impact parameter
         vz  = particles['Velocities']['Value'][:,2]# peculiar velocity along sightline
             
@@ -138,7 +138,7 @@ class SightLineProjection:
         #shift_in_z is 
         shift_in_z   = zproj 
         int_zmins    = ((particles['Positions']['Value'][:,2] - h -shift_in_z) / pix).astype(int) - 1
-        zcents       = particles['Positions']['Value'][:,2] - shift_in_z
+        zcents       = particles['Positions']['Value'][:,2] - shift_in_z # does this reposition everything to be at zero?
         int_zcents   = np.round(zcents / pix).astype(int)
         int_zmaxs    = ((particles['Positions']['Value'][:,2] + h - shift_in_z) / pix).astype(int) + 1
 
@@ -240,7 +240,7 @@ class SightLineProjection:
        # particle loop
         npart = len(h)
         for i in np.arange(npart):
-            if b[i] > 1: # require particle contributes to sightline
+            if b[i] > 1: # require particle contributes to sightline, checking distance in the perpendicular plane
                 continue
             
             zcent   = zcents[i]                                                  # z-location of particle
@@ -248,14 +248,14 @@ class SightLineProjection:
             izmax   = int_zmaxs[i]                                               # z-coordinate of first pixel that particle contributes to (maybe larger than sight line)
 
             # print(zcent, self.lospart["pos"][i,2])
-            zvals    = (np.arange(izmin, izmax).astype(float)) * pix              # z-values of pixels that this particle contributes to
-            intz     = np.arange(izmin, izmax)                                    # corresponding pixel coordinates
+            zvals    = (np.arange(izmin, izmax).astype(float)) * pix              # z-values (cMpc/h) of pixels that this particle contributes to
+            intz     = np.arange(izmin, izmax)                                    # corresponding pixel coordinates. relative index?
  
             zvals   -= zcent                                                      # z-distance between pixel and particle
             zvals   *= hinv[i]                                                    # z-distance beween pixel and particle in units of smoothing length
             
             # restrict to pixels that are inside the smoothing length
-            mask     = (zvals**2 + b[i]**2) < 1.1
+            mask     = (zvals**2 + b[i]**2) < 1.1 # require particle be within smoothing length, in z direction
             zvals    = zvals[mask]                                          
             intz     = np.array(intz[mask])
             
