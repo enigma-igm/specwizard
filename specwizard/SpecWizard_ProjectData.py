@@ -308,7 +308,7 @@ class SightLineProjection:
             
             mdiff  = np.copy(diff) # save mass-weighted kernel contribution
             
-            # density-weighted quantities
+            # smoothed averages, not yet normalized by density
             rho_tot['Densities']['Value'][intz]     += diff
             rho_tot['Velocities']['Value'][intz]    += diff * vz[i]
             rho_tot['Temperatures']['Value'][intz]  += diff * temperature[i]
