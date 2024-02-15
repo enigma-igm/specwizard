@@ -8,6 +8,9 @@ from scipy.special import erf
 from astropy.modeling.functional_models import Voigt1D
 from scipy.special import voigt_profile as VoigtSciPy
 import scipy.interpolate as interpolate
+from IPython import embed
+import sys
+
 
 # convolve(in1, in2, mode='full', method='auto')[source]
 class Lines:
@@ -65,7 +68,8 @@ class Lines:
 
         return fnew    
 
-    def gaussian(self, column_densities = 0, b_kms = 0,vion_kms=0,Tions= 0):
+    def gaussian(self, column_densities = 0, baryon_densities = 0, b_kms = 0, vion_kms=0, vion_tot_kms=0,
+                 baryon_velocities = 0, Tions= 0, baryon_temperatures = 0):
 
         naturalwidth_kms = self.naturalwidth    # natural line width        [km/s]
         f_value      = self.f_value
@@ -83,10 +87,15 @@ class Lines:
         pixel_velocity_kms = np.concatenate((self.v_kms - self.box_kms, self.v_kms, self.v_kms + self.box_kms))
         tau          = np.zeros_like(pixel_velocity_kms)
         densities    = np.zeros_like(pixel_velocity_kms)
+        temp_baryon_densities = np.zeros_like(pixel_velocity_kms)
         velocities   = np.zeros_like(pixel_velocity_kms)
+        temp_baryon_velocities = np.zeros_like(pixel_velocity_kms)
         temperatures = np.zeros_like(pixel_velocity_kms)
-        
-        for column_density, b, vel,Tion in zip(column_densities, b_kms, vion_kms,Tions):
+        temp_baryon_temperatures = np.zeros_like(pixel_velocity_kms)
+        for column_density, bary_dens, b, vel_pec, vel, bary_vpec, Tion, bary_temp in zip(column_densities,
+                                                                                   baryon_densities, b_kms, vion_kms,
+                                                                                   vion_tot_kms, baryon_velocities,
+                                                                                   Tions, baryon_temperatures):
             if column_density >0:
                 # scale b-parameter
                 v_line = b * verf
@@ -97,34 +106,50 @@ class Lines:
                 # add
                 tau          += g_int
                 densities    += g_int * column_density
-                velocities   += g_int * vel
-                temperatures += g_int * Tion            
+                temp_baryon_densities += g_int * bary_dens
+                velocities   += g_int * vel_pec #g_int * vel
+                temp_baryon_velocities += g_int * bary_vpec
+                temperatures += g_int * Tion
+                temp_baryon_temperatures += g_int * bary_temp
         # normalize to pixel size
         tau /= self.pix_kms
         densities /= self.pix_kms
+        temp_baryon_densities /= self.pix_kms
         velocities /= self.pix_kms
+        temp_baryon_velocities /= self.pix_kms
         temperatures /= self.pix_kms
+        temp_baryon_temperatures /= self.pix_kms
         nint = self.npix
         
         if periodic:
             tau          = tau[0:nint] + tau[nint:2*nint] + tau[2*nint:3*nint]
             pixel_velocity_kms = pixel_velocity_kms[nint:2*nint] 
             densities    = densities[0:nint] + densities[nint:2*nint] + densities[2*nint:3*nint]
+            temp_baryon_densities = (temp_baryon_densities[0:nint] + temp_baryon_densities[nint:2*nint] +
+                                   temp_baryon_densities[2*nint:3*nint])
             velocities   = velocities[0:nint] + velocities[nint:2*nint] + velocities[2*nint:3*nint]
+            temp_baryon_velocities = (temp_baryon_velocities[0:nint] + temp_baryon_velocities[nint:2*nint] +
+                                      temp_baryon_velocities[2*nint:3*nint])
             temperatures = temperatures[0:nint] + temperatures[nint:2*nint] + temperatures[2*nint:3*nint]
-            
+            temp_baryon_temperatures = (temp_baryon_temperatures[0:nint] + temp_baryon_temperatures[nint:2*nint] +
+                                        temp_baryon_temperatures[2*nint:3*nint])
         else:
             tau   = tau[nint:2*nint]
             pixel_velocity_kms = pixel_velocity_kms[nint:2*nint] 
-            densities    = densities[nint:2*nint] 
+            densities    = densities[nint:2*nint]
+            temp_baryon_densities = temp_baryon_densities[nint:2*nint]
             velocities   = velocities[nint:2*nint]
-            temperatures = temperatures[nint:2*nint]            
+            temp_baryon_velocities = temp_baryon_velocities[nint:2*nint]
+            temperatures = temperatures[nint:2*nint]
+            temp_baryon_temperatures = temp_baryon_temperatures[nint:2*nint]
         mask = tau > 0 
         #Normalize optical depth quantities 
         densities[mask]     /=  tau[mask]
+        temp_baryon_densities[mask] /=  tau[mask]
         velocities[mask]    /=  tau[mask]
+        temp_baryon_velocities[mask] /=  tau[mask]
         temperatures[mask]  /=  tau[mask]
-        
+        temp_baryon_temperatures[mask] /=  tau[mask]
 
         # compute total column density
         
@@ -132,8 +157,11 @@ class Lines:
         spectrum = {'pixel_velocity_kms':pixel_velocity_kms,
             'optical_depth':tau,
             'optical_depth_densities':densities,
+            'optical_depth_baryon_densities':temp_baryon_densities,
             'optical_depth_velocities':velocities,
+            'optical_depth_baryon_velocities':temp_baryon_velocities,
             'optical_depth_temperatures':temperatures,
+            'optical_depth_baryon_temperatures':temp_baryon_temperatures,
             'total_column_density':nh_tot}
         
         return spectrum
