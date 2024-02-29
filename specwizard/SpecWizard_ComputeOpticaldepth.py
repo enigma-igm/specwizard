@@ -178,10 +178,11 @@ class ComputeOpticaldepth:
             f_value = self.transitions[ion_name]["f-value"]
             if lambda0 > 0:
                 #
-                nions    = self.ToCGS(header, projection[ion_name]["Densities"]) / weight
-                vions    = self.ToCGS(header, projection[ion_name]["Velocities"]) / 1e5
-                Tions    = self.ToCGS(header, projection[ion_name]["Temperatures"])
-                Zions    = projection[ion_name]["Metallicities"]['Value']
+                nion    = self.ToCGS(header, projection[ion_name]["Densities"]) / weight
+                vion    = self.ToCGS(header, projection[ion_name]["Velocities"]) / 1e5
+                Tion    = self.ToCGS(header, projection[ion_name]["Temperatures"])
+                Zion    = projection[ion_name]["Metallicities"]['Value']
+                XCion   = projection[ion_name]["X_Carbon"]['Value']
                 dbary    = self.ToCGS(header, projection_mass["Densities"])
                 vbary     = self.ToCGS(header, projection_mass["Velocities"]) / 1e5
                 Tbary     = self.ToCGS(header, projection_mass["Temperatures"])
@@ -192,8 +193,8 @@ class ComputeOpticaldepth:
                 spectrum = self.MakeOpticaldepth(
                     sightparams=sightparams,
                     weight=weight, lambda0=lambda0, f_value=f_value,
-                    nions=nions, dbary=dbary, vions_kms=vions, vbary=vbary, Tions=Tions, Tbary=Tbary,
-                    Zions=Zions,
+                    nions=nion, dbarys=dbary, vions_kms=vion, vbarys=vbary, Tions=Tion, Tbarys=Tbary,
+                    Zions=Zion, XCions=XCion,
                     element_name = element_name)
 
                 spectra[ion]                    = spectrum
@@ -204,8 +205,8 @@ class ComputeOpticaldepth:
 
     def MakeOpticaldepth(self, sightparams = [0.0,[0.0],1.0,1.0],
                      weight=1.67382335232e-24, lambda0=1215.67, f_value=0.4164, 
-                     nions = [0.0], dbary=[0.0], vions_kms = [0.0], vbary=[0.0], Tions = [0.0],
-                         Tbary=[0.0], Zions= [0.0], element_name = 'Hydrogen'):
+                     nions = [0.0], dbarys=[0.0], vions_kms = [0.0], vbarys=[0.0], Tions = [0.0],
+                         Tbarys=[0.0], Zions= [0.0], XCions=[0.0], element_name = 'Hydrogen'):
 
         ''' Compute optical depth for a given transition, given the ionic density, temperature and peculiar velocity
 
@@ -252,9 +253,9 @@ class ComputeOpticaldepth:
         vHubble_kms    = box_kms * np.arange(len(vions_kms)) / len(vions_kms)
         voffset_kms    = self.specparams['ODParams']['Veloffset']  #Default = 0 
         vions_tot_kms  = vions_kms + vHubble_kms + voffset_kms
-        spectrum = lines.gaussian(column_densities = ioncolumns, baryon_densities=dbary, b_kms = bions_kms, vion_kms=vions_kms,
-                                  vion_tot_kms=vions_tot_kms, baryon_velocities=vbary, Tions=Tions,
-                                  baryon_temperatures=Tbary, ion_metallicities=Zions)
+        spectrum = lines.gaussian(column_densities = ioncolumns, baryon_densities=dbarys, b_kms = bions_kms, vion_kms=vions_kms,
+                                  vion_tot_kms=vions_tot_kms, baryon_velocities=vbarys, Tions=Tions,
+                                  baryon_temperatures=Tbarys, ion_metallicities=Zions, ion_X_Carbon=XCions)
 
         # Adjust Gaussian to Voigt profile? Unsure if correct though, have to check.
         """if (not self.VoigtOff) and (element_name=="Hydrogen"): # ccd commented out, probably shouldn't be here...
@@ -288,7 +289,10 @@ class ComputeOpticaldepth:
                 'Ion Metallicities': {'Value':spectrum['tau_ion_metallicities'],
                                       'Info':self.SetUnit(vardescription="Tau weighted ion metallicity",
                                       Lunit=1, aFact=0.0, hFact=0.0)},#ion_metallicities,
-                'IonColumnDensity': {'Value':column_density,
+                'Ion X_Carbon': {'Value':spectrum['tau_ion_X_Carbon'],
+                                    'Info':self.SetUnit(vardescription="Tau weighted ion carbon mass fraction",
+                                    Lunit=1, aFact=0.0, hFact=0.0)},#ion_X_Carbon,
+                'Ion Column Density': {'Value':spectrum['total_column_density'],
                                      'Info':self.SetUnit(vardescription="Ion column density",
                                       Lunit=1, aFact=0.0, hFact=0.0)}
                 }
