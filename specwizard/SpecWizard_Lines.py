@@ -44,15 +44,24 @@ class Lines:
         err     = 0.5 * (1 + erf(v))
         return v, err
     
-    def IDinterpol(self, x, xp, fp, cumulative=True):
-        ''' Interpolate the function fx(xp) to the points x, conserving the integral of fp.
-            This assumes that both x and xp are equally spaced '''
+    def IDinterpol(self, x, xp, fp, cumulative=True, stop_flag=False):
+        ''' Interpolate the function fx(xp) to the points x, conserving the integral of fp, and thereby the total
+            optical depth. This assumes that both x and xp are equally spaced.
+
+            Inputs:
+                x (array): Difference in velocity between different bits of material and the sightline pixel.
+                xp (array): b*verf, where b is Doppler b parameter (thermal broadening scale) and verf is the
+                            array of velocity positions of the error function value.
+                            verf corresponds to y in Lukic+15 appendix
+                fp (array): The value of the error function at each xp, or velocity separation times the b parameter.
+                cumulative (bool): If True, the input fp is the cumulative sum of the error function values.(?)
+        '''
 
         # extend x axis by one element
         dx   = x[-1] - x[-2]
         xnew = np.concatenate((x, [x[-1]+dx]))
 
-        # compute culmulative sum of fp's and extend by one element
+        # compute cumulative sum of fp's and extend by one element
         if not cumulative:
             Fc   = np.concatenate(([0], np.cumsum(fp)))
         else:
@@ -63,14 +72,18 @@ class Lines:
         # interpolate cumulative sum
         fcnew = np.interp(xnew, Xc, Fc)
 
-        # difference
+        # difference to get the per pixel contribution
         fnew  = (np.roll(fcnew, -1) - fcnew)[:-1]
 
         return fnew    
 
     def gaussian(self, column_densities = 0, baryon_densities = 0, b_kms = 0, vion_kms=0, vion_tot_kms=0,
-                 baryon_velocities = 0, Tions= 0, baryon_temperatures = 0):
-
+                 baryon_velocities = 0, Tions= 0, baryon_temperatures = 0, ion_metallicities = 0):
+        """
+            Calculate the tau-weighted quantities for a Gaussian line profile, conserving the optical depth over the
+            integral. Given the real space pixel quantities, loop over the redshift space pixels and assign tau. Also
+            calculates and returns certain optical-depth weighted physical quantities.
+        """
         naturalwidth_kms = self.naturalwidth    # natural line width        [km/s]
         f_value      = self.f_value
         lambda0      = self.lambda0  # rest-wavelength           [cm]
@@ -78,13 +91,15 @@ class Lines:
         periodic     = self.periodic
 
         # line cross section times speed of light, c [cm^2 * cm/s]
-        sigma        = self.sigma
+        sigma        = self.sigma # this is the sigma from Theuns et al. 1998. Lorentzian component is excluded.
         
         # generate normalized error function
         verf, erf = self.errfunc()
         
-        # extent velocity range
+        # full extended sightline (3x the box size) for periodic boundary conditions
         pixel_velocity_kms = np.concatenate((self.v_kms - self.box_kms, self.v_kms, self.v_kms + self.box_kms))
+
+        # initialize redshift-space arrays at zero for tau and tau-weighted summation
         tau          = np.zeros_like(pixel_velocity_kms)
         densities    = np.zeros_like(pixel_velocity_kms)
         temp_baryon_densities = np.zeros_like(pixel_velocity_kms)
@@ -92,10 +107,12 @@ class Lines:
         temp_baryon_velocities = np.zeros_like(pixel_velocity_kms)
         temperatures = np.zeros_like(pixel_velocity_kms)
         temp_baryon_temperatures = np.zeros_like(pixel_velocity_kms)
-        for column_density, bary_dens, b, vel_pec, vel, bary_vpec, Tion, bary_temp in zip(column_densities,
-                                                                                   baryon_densities, b_kms, vion_kms,
-                                                                                   vion_tot_kms, baryon_velocities,
-                                                                                   Tions, baryon_temperatures):
+        metallicities = np.zeros_like(pixel_velocity_kms)
+
+        # loop over real space quantities to find contributions to redshift-space pixels
+        for column_density, bary_dens, b, vel_pec, vel, bary_vpec, Tion, bary_temp, ion_Z in (
+                zip(column_densities, baryon_densities, b_kms, vion_kms, vion_tot_kms, baryon_velocities, Tions,
+                    baryon_temperatures, ion_metallicities)):
             if column_density >0:
                 # scale b-parameter
                 v_line = b * verf
@@ -111,6 +128,7 @@ class Lines:
                 temp_baryon_velocities += g_int * bary_vpec
                 temperatures += g_int * Tion
                 temp_baryon_temperatures += g_int * bary_temp
+                metallicities += g_int * ion_Z
         # normalize to pixel size
         tau /= self.pix_kms
         densities /= self.pix_kms
@@ -119,6 +137,7 @@ class Lines:
         temp_baryon_velocities /= self.pix_kms
         temperatures /= self.pix_kms
         temp_baryon_temperatures /= self.pix_kms
+        metallicities /= self.pix_kms
         nint = self.npix
         
         if periodic:
@@ -133,6 +152,7 @@ class Lines:
             temperatures = temperatures[0:nint] + temperatures[nint:2*nint] + temperatures[2*nint:3*nint]
             temp_baryon_temperatures = (temp_baryon_temperatures[0:nint] + temp_baryon_temperatures[nint:2*nint] +
                                         temp_baryon_temperatures[2*nint:3*nint])
+            metallicities = (metallicities[0:nint] + metallicities[nint:2*nint] + metallicities[2*nint:3*nint])
         else:
             tau   = tau[nint:2*nint]
             pixel_velocity_kms = pixel_velocity_kms[nint:2*nint] 
@@ -142,6 +162,7 @@ class Lines:
             temp_baryon_velocities = temp_baryon_velocities[nint:2*nint]
             temperatures = temperatures[nint:2*nint]
             temp_baryon_temperatures = temp_baryon_temperatures[nint:2*nint]
+            metallicities = metallicities[nint:2*nint]
         mask = tau > 0 
         #Normalize optical depth quantities 
         densities[mask]     /=  tau[mask]
@@ -150,18 +171,20 @@ class Lines:
         temp_baryon_velocities[mask] /=  tau[mask]
         temperatures[mask]  /=  tau[mask]
         temp_baryon_temperatures[mask] /=  tau[mask]
+        metallicities[mask] /=  tau[mask]
 
         # compute total column density
         
         nh_tot = np.cumsum(tau)[-1] * 1.e5 * self.pix_kms / sigma
         spectrum = {'pixel_velocity_kms':pixel_velocity_kms,
             'optical_depth':tau,
-            'optical_depth_densities':densities,
-            'optical_depth_baryon_densities':temp_baryon_densities,
-            'optical_depth_velocities':velocities,
-            'optical_depth_baryon_velocities':temp_baryon_velocities,
-            'optical_depth_temperatures':temperatures,
-            'optical_depth_baryon_temperatures':temp_baryon_temperatures,
+            'tau_ion_column_densities':densities,
+            'tau_baryon_densities':temp_baryon_densities,
+            'tau_ion_velocities':velocities,
+            'tau_baryon_velocities':temp_baryon_velocities,
+            'tau_ion_temperatures':temperatures,
+            'tau_baryon_temperatures':temp_baryon_temperatures,
+            'tau_ion_metallicities':metallicities,
             'total_column_density':nh_tot}
         
         return spectrum
