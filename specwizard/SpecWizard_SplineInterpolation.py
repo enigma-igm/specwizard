@@ -17,7 +17,7 @@ class Bspline:
         
     def Info(self):
         #
-        print("This class defines the B-spline kernel of Monaghan and Lattanzio, as used in Gadget-2")
+        pass#print("This class defines the B-spline kernel of Monaghan and Lattanzio, as used in Gadget-2")
         
     def Kernel(self,q):
         # Input: q: distance between points in units of smoothing length
