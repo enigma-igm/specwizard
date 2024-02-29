@@ -883,7 +883,6 @@ class ReadSwift:
         if self.snaptype == 'snapshot':
             
             
-            sightline
             axis_dic,xpos,ypos,zpos,los_length,msl_x3  = self.inputfunc.BuildLOS(sightline,header)
             sim_xmin,sim_xmax = axis_dic[0]
             sim_ymin,sim_ymax = axis_dic[1]
