@@ -8,7 +8,7 @@ from specwizard.SpecWizard_IonizationBalance import IonizationBalance
 from specwizard.SpecWizard_SplineInterpolation import ColumnTable
 from specwizard.SpecWizard_SplineInterpolation import Bspline, TGauss
 from specwizard.SpecWizard_IonTables_test import IonTables
-#
+from IPython import embed
 import specwizard.Phys
 constants = specwizard.Phys.ReadPhys()
 kernel = Bspline()
@@ -21,7 +21,7 @@ class SightLineProjection:
         self.specparams        = specparams
 
         self.kernelprojection = specparams["extra_parameters"]['Kernel']
-        self.pixkms           = specparams["extra_parameters"]['pixkms']
+        self.pixkms           = specparams["extra_parameters"]['pixkms'] # pixel size in km/s
         #set kernel
         if kernelprojection=="Bspline":
             columntable      = ColumnTable(Bspline())
@@ -98,7 +98,7 @@ class SightLineProjection:
         # compute extra properties for sightline
         
         # ensure that an integer number of pixels fit into a sight line
-        sightkms = boxkms * los_length
+        sightkms = boxkms * los_length # los_length is frac of sightline
         npix    = np.int(sightkms / self.specparams["pixkms"]) + 1
         pixkms  = sightkms / npix
         sight   = box * los_length
@@ -152,6 +152,7 @@ class SightLineProjection:
         rho_tot['Velocities']    = {'Value': np.zeros(npix), 'Info': particles['Velocities']['Info']}     # density-weighted peculiar velocity
         rho_tot['Temperatures']  = {'Value': np.zeros(npix), 'Info': particles['Temperatures']['Info']}   # density-weigthed temperatue
         rho_tot['Metallicities'] = {'Value': np.zeros(npix), 'Info': particles['Metallicities']['Info']}  # density-weigthed metallicity
+        rho_tot['X_Carbon'] = {'Value': np.zeros(npix), 'Info': 'SPH-smoothed carbon mass fraction'}
 
         # element densities
         rho_element             = {}
@@ -178,6 +179,8 @@ class SightLineProjection:
         vunit["VarDescription"] = 'Ion-weighted velocities'
         tunit                   = particles['Temperatures']['Info']
         tunit["VarDesciption"]  = 'Ion-weighted temperatures '
+        Zunit = particles['Metallicities']['Info']
+        Zunit["VarDesciption"] = 'Ion-weighted metal mass fraction'
 
         # variables per ion
         for (element, ion) in ions:
@@ -185,6 +188,7 @@ class SightLineProjection:
             rho_ion[ion]['Densities']    = {'Value': np.zeros(npix), 'Info': nunit}  # ion mass density
             rho_ion[ion]['Velocities']   = {'Value': np.zeros(npix), 'Info': vunit}  # ion-weighted peculiar velocity
             rho_ion[ion]['Temperatures'] = {'Value': np.zeros(npix), 'Info': tunit}  # ion-weigthed temperature
+            rho_ion[ion]['Metallicities'] = {'Value': np.zeros(npix), 'Info': Zunit}
             rho_ion[ion]['Mass']         = self.specparams["ionparams"]["transitionparams"][ion]["Mass"]
             rho_ion[ion]['lambda0']      = self.specparams["ionparams"]["transitionparams"][ion]["lambda0"]
             rho_ion[ion]['f-value']      = self.specparams["ionparams"]["transitionparams"][ion]["f-value"]
@@ -313,6 +317,7 @@ class SightLineProjection:
             rho_tot['Velocities']['Value'][intz]    += diff * vz[i]
             rho_tot['Temperatures']['Value'][intz]  += diff * temperature[i]
             rho_tot['Metallicities']['Value'][intz] += diff * Z[i]
+            rho_tot['X_Carbon']['Value'][intz]      += diff * ParticleAbundances['Carbon']["massfraction"][i]
 
             # Densities of elements
             for element in elementnames:
@@ -329,6 +334,7 @@ class SightLineProjection:
                 rho_ion[ion]['Densities']['Value'][intz]    += diff
                 rho_ion[ion]['Velocities']['Value'][intz]   += diff * vz[i]
                 rho_ion[ion]['Temperatures']['Value'][intz] += diff * temperature[i]
+                rho_ion[ion]['Metallicities']['Value'][intz] += diff * Z[i]
             
             try:
                 Ions2do = np.array([ions[i][1] for i in range(len(ions))])
@@ -343,12 +349,13 @@ class SightLineProjection:
             except:
                 pass
          
-        # normalize peculiar velocity and temperature
+        # normalize the density*quantity values by the density
         mask = rho_tot['Densities']['Value'] > 0
         rho_tot['Velocities']['Value'][mask]   /= rho_tot['Densities']['Value'][mask]
         rho_tot['Temperatures']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
         rho_tot['Metallicities']['Value'][mask]/= rho_tot['Densities']['Value'][mask]
-        
+        rho_tot['X_Carbon']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
+
         for element in elementnames:
             mask = rho_element[element]['Densities']['Value'] > 0
             rho_element[element]['Velocities']['Value'][mask]    /= rho_element[element]['Densities']['Value'][mask]
@@ -358,7 +365,7 @@ class SightLineProjection:
             mask = rho_ion[ion]['Densities']['Value'] > 0
             rho_ion[ion]['Velocities']['Value'][mask]    /= rho_ion[ion]['Densities']['Value'][mask]
             rho_ion[ion]['Temperatures']['Value'][mask]  /= rho_ion[ion]['Densities']['Value'][mask]
-
+            rho_ion[ion]['Metallicities']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
         
         # prepare output
         unit                   = particles["Positions"]['Info']
