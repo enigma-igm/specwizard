@@ -9,6 +9,8 @@ import specwizard.Phys
 constants = specwizard.Phys.ReadPhys()
 #
 import scipy.interpolate as interpolate
+from IPython import embed
+
 
 class ComputeOpticaldepth:
     ''' Methods to compute optical depth as a function of velocity for a single sight line '''
@@ -28,7 +30,7 @@ class ComputeOpticaldepth:
         self.ThermEff   = self.specparams['ODParams']['ThermalEffectsOff']
         self.PecVelEff  = self.specparams['ODParams']['PecVelEffectsOff']
         self.VoigtOff   = self.specparams['ODParams']['VoigtOff']
-    def MakeAllOpticaldepth(self, projected_los):
+    def MakeAllOpticaldepth(self, projected_los, DoSimIons = False):
         '''
             Apply MakeOpticaldepth to compute optical depths for all desired ionic transitions
 
@@ -121,7 +123,7 @@ class ComputeOpticaldepth:
             if extend["extend"]:
                 projectionSIW = projectionSimIon
             SimIons       = list(projectionSIW.keys())
-            DoSimIons     = True
+            #DoSimIons     = True
         except:
             pass
             
@@ -179,6 +181,7 @@ class ComputeOpticaldepth:
                 nions    = self.ToCGS(header, projection[ion_name]["Densities"]) / weight
                 vions    = self.ToCGS(header, projection[ion_name]["Velocities"]) / 1e5
                 Tions    = self.ToCGS(header, projection[ion_name]["Temperatures"])
+                Zions    = projection[ion_name]["Metallicities"]['Value']
                 dbary    = self.ToCGS(header, projection_mass["Densities"])
                 vbary     = self.ToCGS(header, projection_mass["Velocities"]) / 1e5
                 Tbary     = self.ToCGS(header, projection_mass["Temperatures"])
@@ -190,26 +193,19 @@ class ComputeOpticaldepth:
                     sightparams=sightparams,
                     weight=weight, lambda0=lambda0, f_value=f_value,
                     nions=nions, dbary=dbary, vions_kms=vions, vbary=vbary, Tions=Tions, Tbary=Tbary,
+                    Zions=Zions,
                     element_name = element_name)
 
-                spectra[ion]                    = {}
-                spectra[ion]["Velocities"]      = {'Value': vel_kms, 'Info': vunit}
-                spectra[ion]["Optical depths"]  = spectrum["Optical depths"]
-                spectra[ion]["Densities"]       = spectrum["Densities"]
-                spectra[ion]["Baryon Densities"] = spectrum["Baryon Densities"]
-                spectra[ion]["Velocities"]      = spectrum["Velocities"]
-                spectra[ion]["Baryon Velocities"] = spectrum["Baryon Velocities"]
-                spectra[ion]["Temperatures"]    = spectrum["Temperatures"]
-                spectra[ion]["Baryon Temperatures"] = spectrum["Baryon Temperatures"]
-                spectra[ion]["IonColumnDensity"] = spectrum["IonColumnDensity"]
+                spectra[ion]                    = spectrum
                 spectra[ion]["Mass"]            = weight
                 spectra[ion]["lambda0"]         = lambda0
                 spectra[ion]["f-value"]         = f_value
-        return spectra 
+        return spectra
+
     def MakeOpticaldepth(self, sightparams = [0.0,[0.0],1.0,1.0],
                      weight=1.67382335232e-24, lambda0=1215.67, f_value=0.4164, 
                      nions = [0.0], dbary=[0.0], vions_kms = [0.0], vbary=[0.0], Tions = [0.0],
-                         Tbary=[0.0], element_name = 'Hydrogen'):
+                         Tbary=[0.0], Zions= [0.0], element_name = 'Hydrogen'):
 
         ''' Compute optical depth for a given transition, given the ionic density, temperature and peculiar velocity
 
@@ -224,6 +220,7 @@ class ComputeOpticaldepth:
                 vbary (array): Array containing the peculiar velocity of the baryons in km/s.
                 Tions (array): Array containing the temperature of the ions in K.
                 Tbary (array): Array containing the temperature of the baryons in K.
+                Zions (array): Array containing the metallicity of the ion-containing gas.
                 element_name (str): Name of the element to which the transition belongs.
 
             Returns:
@@ -237,80 +234,65 @@ class ComputeOpticaldepth:
         pixel_kms  = sightparams['pixel_kms']
         pixel      = sightparams['pixel']
         npix         = len(vel_kms)
-        tau          = np.zeros_like(vel_kms)
-        densities    = np.zeros_like(vel_kms)
-        baryon_density = np.zeros_like(vel_kms) # tau weighted baryon density (all species)
-        velocities   = np.zeros_like(vel_kms)  
-        temperatures = np.zeros_like(vel_kms)
-
         
         # passing the extent of the box in km/s introduces periodic boundary conditions
         lines = Lines(v_kms = vel_kms, box_kms=box_kms, constants = self.constants, verbose=False, 
                  lambda0_AA=lambda0, f_value=f_value,periodic=self.periodic)
             
-        # convert from density to column density
-        ioncolumns = nions * pixel                                           # in ions/cm^2
+        # convert from density to column density for optical depth calculation
+        ioncolumns = nions * pixel  # ions/cm^3 int. over line of sight -> ions/cm^2
         dunit        = self.SetUnit(vardescription="Total ion column density", 
                                              Lunit=1.0, aFact=0.0, hFact=0.0)
         column_density    = {'Value': ioncolumns, "Info": dunit} # in ions/cm^2
 
         # compute b-parameter
-        bions_kms = np.sqrt(2*self.constants["kB"]*Tions/weight) / 1e5
+        bions_kms = np.sqrt(2*self.constants["kB"]*(Tions+0.1)/weight) / 1e5 # add 0.1 K to avoid <0 temp with float error
         
         # add Hubble velocity to peculiar velocity
         vHubble_kms    = box_kms * np.arange(len(vions_kms)) / len(vions_kms)
         voffset_kms    = self.specparams['ODParams']['Veloffset']  #Default = 0 
         vions_tot_kms  = vions_kms + vHubble_kms + voffset_kms
         spectrum = lines.gaussian(column_densities = ioncolumns, baryon_densities=dbary, b_kms = bions_kms, vion_kms=vions_kms,
-                                  vion_tot_kms=vions_tot_kms,baryon_velocities=vbary,Tions=Tions, baryon_temperatures=Tbary)
+                                  vion_tot_kms=vions_tot_kms, baryon_velocities=vbary, Tions=Tions,
+                                  baryon_temperatures=Tbary, ion_metallicities=Zions)
 
-        tau        = spectrum['optical_depth']
-        densities  = spectrum['optical_depth_densities']
-        velocities = spectrum['optical_depth_velocities']# - vHubble_kms # trying subtracting Hubble velocity...
-        temperatures = spectrum['optical_depth_temperatures']
-        baryon_density = spectrum['optical_depth_baryon_densities']
-        baryon_velocities = spectrum['optical_depth_baryon_velocities']
-        baryon_temperatures = spectrum['optical_depth_baryon_temperatures']
-        pixel_velocities = spectrum['pixel_velocity_kms']
-
-        # optical depth-weighted quantities
-        if (not self.VoigtOff) and (element_name=="Hydrogen"):
+        # Adjust Gaussian to Voigt profile? Unsure if correct though, have to check.
+        """if (not self.VoigtOff) and (element_name=="Hydrogen"): # ccd commented out, probably shouldn't be here...
 #            print("this is happening")
-            tau = lines.convolvelorentz(tau)
-        #
-        dunit        = self.SetUnit(vardescription="Tau weighted ion mass density", 
-                                             Lunit=1.0, aFact=0.0, hFact=0.0)
-        #densities   *= weight # mass density! ccd -> nope, that's not what it is! it's like a mass column density...
-        densities    = {'Value': densities, "Info": dunit}
+            tau = lines.convolvelorentz(tau)"""
+        if (abs(spectrum['total_column_density'] - np.sum(column_density['Value']))/spectrum['total_column_density']) > 0.01:
+            print("Warning: total column density from tau differs by more than 1 percent from the input column "
+                  "densities.")
+        # TODO eventually update the "baryon" descriptor to be "gas" instead
+        return {'Optical depths': {'Value':spectrum['optical_depth'],
+                                   'Info':self.SetUnit(vardescription="Ion optical depth (tau)", Lunit=1, aFact=0.0,
+                                                       hFact=0.0)},
+                'Densities': {'Value':spectrum['tau_ion_column_densities'],
+                              'Info':self.SetUnit(vardescription="Tau weighted ion column density",
+                                             Lunit=1.0, aFact=0.0, hFact=0.0)},
+                'Baryon Densities': {'Value':spectrum['tau_baryon_densities'],
+                                     'Info':self.SetUnit(vardescription="Tau weighted baryon mass density",
+                                                Lunit=1.0, aFact=0.0, hFact=0.0)},#baryon_density,
+                'Velocities': {'Value':spectrum['tau_ion_velocities'],
+                               'Info':self.SetUnit(vardescription="Tau weighted ion peculiar velocity",
+                                             Lunit=1e5, aFact=0.0, hFact=0.0)}, # km/s
+                'Baryon Velocities': {'Value':spectrum['tau_baryon_velocities'],
+                                      'Info':self.SetUnit(vardescription="Tau weighted baryon peculiar velocity",
+                                                          Lunit=1e5, aFact=0.0, hFact=0.0)},#baryon_velocities,
+                'Temperatures': {'Value':spectrum['tau_ion_temperatures'],
+                                 'Info':self.SetUnit(vardescription="Tau weighted ion temperature",
+                                             Lunit=1, aFact=0.0, hFact=0.0)},#temperatures,
+                'Baryon Temperatures': {'Value':spectrum['tau_baryon_temperatures'],
+                                        'Info':self.SetUnit(vardescription="Tau weighted baryon temperature",
+                                             Lunit=1, aFact=0.0, hFact=0.0)},#baryon_temperatures,
+                'Ion Metallicities': {'Value':spectrum['tau_ion_metallicities'],
+                                      'Info':self.SetUnit(vardescription="Tau weighted ion metallicity",
+                                      Lunit=1, aFact=0.0, hFact=0.0)},#ion_metallicities,
+                'IonColumnDensity': {'Value':column_density,
+                                     'Info':self.SetUnit(vardescription="Ion column density",
+                                      Lunit=1, aFact=0.0, hFact=0.0)}
+                }
 
-        bdunit        = self.SetUnit(vardescription="Tau weighted baryon mass density",
-                                                Lunit=1.0, aFact=0.0, hFact=0.0)
-        baryon_density = {'Value': baryon_density, "Info": bdunit}
-
-        vunit        = self.SetUnit(vardescription="Tau weighted ion peculiar velocity",
-                                             Lunit=1e5, aFact=0.0, hFact=0.0)
-        velocities   = {'Value': velocities, 'Info': vunit}
-
-        vdunit = self.SetUnit(vardescription="Tau weighted baryon peculiar velocity",
-                             Lunit=1e5, aFact=0.0, hFact=0.0)
-        baryon_velocities = {'Value': baryon_velocities, 'Info': vdunit}
-
-        tunit        = self.SetUnit(vardescription="Tau weighted ion temperature",
-                                             Lunit=1, aFact=0.0, hFact=0.0)
-        temperatures = {'Value': temperatures, 'Info': tunit}
-
-        tdunit = self.SetUnit(vardescription="Tau weighted baryon temperature",
-                             Lunit=1, aFact=0.0, hFact=0.0)
-        baryon_temperatures = {'Value': baryon_temperatures, 'Info': tdunit}
-
-        tauunit      = self.SetUnit(vardescription="Ionic optical depth", 
-                                             Lunit=1, aFact=0.0, hFact=0.0)
-        tau          = {'Value':tau, 'Info':tauunit}
-
-        return {'Optical depths':tau, 'Densities': densities, 'Baryon Densities': baryon_density,
-                'Velocities': velocities, 'Baryon Velocities': baryon_velocities,
-                'Temperatures': temperatures, 'Baryon Temperatures': baryon_temperatures,
-                'IonColumnDensity':column_density}
 
     def CGSunit(self, header, variable):
         ''' 
