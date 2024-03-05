@@ -85,7 +85,7 @@ class SightLineProjection:
         sightinfo          = sightlinedata["SightInfo"]
         particles          = sightlinedata["Particles"]
         ions               = self.specparams["ionparams"]["Ions"]
-        ionizationbalance  = self.specparams["ionparams"]["IonizationBalance"]
+        ionizationbalance  = self.specparams["ionparams"]["IonizationBalance"]  # IonTables object
         elementnames       = self.specparams["elementparams"]["ElementNames"]
         header             = sightlinedata["Header"] 
         los_length         = sightinfo['ProjectionLength'] # fraction of domain
@@ -185,11 +185,12 @@ class SightLineProjection:
         # variables per ion
         for (element, ion) in ions:
             rho_ion[ion]                 = {}
-            rho_ion[ion]['Densities']    = {'Value': np.zeros(npix), 'Info': nunit}  # ion mass density
+            rho_ion[ion]['Densities']    = {'Value': np.zeros(npix), 'Info': nunit}  # ion column density
             rho_ion[ion]['Velocities']   = {'Value': np.zeros(npix), 'Info': vunit}  # ion-weighted peculiar velocity
             rho_ion[ion]['Temperatures'] = {'Value': np.zeros(npix), 'Info': tunit}  # ion-weigthed temperature
             rho_ion[ion]['Metallicities'] = {'Value': np.zeros(npix), 'Info': Zunit}
-            rho_ion[ion]['X_Carbon'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted carbon mass fraction'}
+            rho_ion[ion]['Density Carbon'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted carbon mass density'}
+            rho_ion[ion]['Density Hydrogen'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted hydrogen mass density'}
             rho_ion[ion]['Mass']         = self.specparams["ionparams"]["transitionparams"][ion]["Mass"]
             rho_ion[ion]['lambda0']      = self.specparams["ionparams"]["transitionparams"][ion]["lambda0"]
             rho_ion[ion]['f-value']      = self.specparams["ionparams"]["transitionparams"][ion]["f-value"]
@@ -266,13 +267,6 @@ class SightLineProjection:
             
 
             if len(zvals) == 0 or len(zvals) == 1:
-                # print("Error len zvals = 0 .")
-                # print("Pix = ", pix)
-                # print("smoothing length= ", h[i])
-                # print(izmin,izmax)
-                # print("zpos",zcent)
-                # print("assigned pix", int_zcents[i] * pix)
-#                zvals = np.array(int_zcents[i] * pix) + h[i]
                 pts   = np.array([b[i],ztable.max()])
                 diff  = interpolate.interpn((btable, ztable), table, pts, bounds_error=True, fill_value=None)
                 diff *= hinv[i]**2
@@ -336,8 +330,8 @@ class SightLineProjection:
                 rho_ion[ion]['Velocities']['Value'][intz]   += diff * vz[i]
                 rho_ion[ion]['Temperatures']['Value'][intz] += diff * temperature[i]
                 rho_ion[ion]['Metallicities']['Value'][intz] += diff * Z[i]
-                rho_ion[ion]['X_Carbon']['Value'][intz]      += diff * ParticleAbundances['Carbon']["massfraction"][i]
-            
+                rho_ion[ion]['Density Carbon']['Value'][intz]      += diff / ComputedIonFractions[ion][i]
+                rho_ion[ion]['Density Hydrogen']['Value'][intz] += mdiff * ParticleAbundances['Hydrogen']["massfraction"][i]
             try:
                 Ions2do = np.array([ions[i][1] for i in range(len(ions))])
                 maskindx = np.where(np.in1d(Ions2do,SimIons))[0]
@@ -368,7 +362,8 @@ class SightLineProjection:
             rho_ion[ion]['Velocities']['Value'][mask]    /= rho_ion[ion]['Densities']['Value'][mask]
             rho_ion[ion]['Temperatures']['Value'][mask]  /= rho_ion[ion]['Densities']['Value'][mask]
             rho_ion[ion]['Metallicities']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
-            rho_ion[ion]['X_Carbon']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
+            #rho_ion[ion]['X_Carbon']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
+            # don't normalize Density Carbon and Density Hydrogen
         
         # prepare output
         unit                   = particles["Positions"]['Info']

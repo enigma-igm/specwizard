@@ -77,13 +77,19 @@ class Lines:
 
         return fnew    
 
-    def gaussian(self, column_densities = 0, baryon_densities = 0, b_kms = 0, vion_kms=0, vion_tot_kms=0,
-                 baryon_velocities = 0, Tions= 0, baryon_temperatures = 0, ion_metallicities = 0,
-                 ion_X_Carbon = 0):
+    def gaussian(self, column_densities = 0, b_kms = 0, vion_tot_kms=0, realspace_quantities=None):
+
+                 #baryon_densities = 0, b_kms = 0, vion_kms=0, vion_tot_kms=0,
+                 #baryon_velocities = 0, Tions= 0, baryon_temperatures = 0, ion_metallicities = 0,
+                 #ion_X_Carbon = 0):
         """
             Calculate the tau-weighted quantities for a Gaussian line profile, conserving the optical depth over the
             integral. Given the real space pixel quantities, loop over the redshift space pixels and assign tau. Also
             calculates and returns certain optical-depth weighted physical quantities.
+
+            Inputs:
+                realspace_quantities (list of lists): List of the real space quantities to be tau-weighted, with
+                                                      dimension of Nquantities (rows) times Npixels.
         """
         naturalwidth_kms = self.naturalwidth    # natural line width        [km/s]
         f_value      = self.f_value
@@ -98,104 +104,44 @@ class Lines:
         verf, erf = self.errfunc()
         
         # full extended sightline (3x the box size) for periodic boundary conditions
+        # redshift space velocity position
         pixel_velocity_kms = np.concatenate((self.v_kms - self.box_kms, self.v_kms, self.v_kms + self.box_kms))
 
         # initialize redshift-space arrays at zero for tau and tau-weighted summation
-        tau          = np.zeros_like(pixel_velocity_kms)
-        densities    = np.zeros_like(pixel_velocity_kms)
-        temp_baryon_densities = np.zeros_like(pixel_velocity_kms)
-        velocities   = np.zeros_like(pixel_velocity_kms)
-        temp_baryon_velocities = np.zeros_like(pixel_velocity_kms)
-        temperatures = np.zeros_like(pixel_velocity_kms)
-        temp_baryon_temperatures = np.zeros_like(pixel_velocity_kms)
-        metallicities = np.zeros_like(pixel_velocity_kms)
-        zspace_X_carbon = np.zeros_like(pixel_velocity_kms)
+        tau          = np.zeros_like(pixel_velocity_kms) # add small number to avoid division by zero
+
+        # initialize redshift-space arrays at zero for the tau-weighted extra quantities
+        redshift_quantities = np.zeros((len(realspace_quantities), len(pixel_velocity_kms)))
 
         # loop over real space quantities to find contributions to redshift-space pixels
-        for column_density, bary_dens, b, vel_pec, vel, bary_vpec, Tion, bary_temp, ion_Z, ion_XC in (
-                zip(column_densities, baryon_densities, b_kms, vion_kms, vion_tot_kms, baryon_velocities, Tions,
-                    baryon_temperatures, ion_metallicities, ion_X_Carbon)):
-            if column_density >0:
+        for ri in range(len(column_densities)): # real space
+            if column_densities[ri] > 0:
                 # scale b-parameter
-                v_line = b * verf
-
+                v_line = b_kms[ri] * verf
                 # interpolate, and convert velocity from km/s to cm/s
-                g_int   = column_density * sigma * self.IDinterpol(pixel_velocity_kms - vel, v_line, erf, cumulative=True) / 1e5
-
+                g_int = column_densities[ri] * sigma * self.IDinterpol(pixel_velocity_kms - vion_tot_kms[ri], v_line, erf,
+                                                                 cumulative=True) / 1e5
                 # add
-                tau          += g_int
-                densities    += g_int * column_density
-                temp_baryon_densities += g_int * bary_dens
-                velocities   += g_int * vel_pec #g_int * vel
-                temp_baryon_velocities += g_int * bary_vpec
-                temperatures += g_int * Tion
-                temp_baryon_temperatures += g_int * bary_temp
-                metallicities += g_int * ion_Z
-                zspace_X_carbon += g_int * ion_XC
-        # normalize to pixel size
-        tau /= self.pix_kms
-        densities /= self.pix_kms
-        temp_baryon_densities /= self.pix_kms
-        velocities /= self.pix_kms
-        temp_baryon_velocities /= self.pix_kms
-        temperatures /= self.pix_kms
-        temp_baryon_temperatures /= self.pix_kms
-        metallicities /= self.pix_kms
-        zspace_X_carbon /= self.pix_kms
+                tau += g_int
+                for qi in range(len(realspace_quantities)): # each field
+                    redshift_quantities[qi] += realspace_quantities[qi][ri] * g_int
+        zspace_output = np.row_stack((tau, redshift_quantities))
+        # past the redshift space loop, normalize weighted to pixel size
+        zspace_output /= pix_kms
         nint = self.npix
-        
+
         if periodic:  # sum real space material contributions on 3x skewer segment
-            tau          = tau[0:nint] + tau[nint:2*nint] + tau[2*nint:3*nint]
-            pixel_velocity_kms = pixel_velocity_kms[nint:2*nint] 
-            densities    = densities[0:nint] + densities[nint:2*nint] + densities[2*nint:3*nint]
-            temp_baryon_densities = (temp_baryon_densities[0:nint] + temp_baryon_densities[nint:2*nint] +
-                                   temp_baryon_densities[2*nint:3*nint])
-            velocities   = velocities[0:nint] + velocities[nint:2*nint] + velocities[2*nint:3*nint]
-            temp_baryon_velocities = (temp_baryon_velocities[0:nint] + temp_baryon_velocities[nint:2*nint] +
-                                      temp_baryon_velocities[2*nint:3*nint])
-            temperatures = temperatures[0:nint] + temperatures[nint:2*nint] + temperatures[2*nint:3*nint]
-            temp_baryon_temperatures = (temp_baryon_temperatures[0:nint] + temp_baryon_temperatures[nint:2*nint] +
-                                        temp_baryon_temperatures[2*nint:3*nint])
-            metallicities = (metallicities[0:nint] + metallicities[nint:2*nint] + metallicities[2*nint:3*nint])
-            zspace_X_carbon = (zspace_X_carbon[0:nint] + zspace_X_carbon[nint:2*nint] + zspace_X_carbon[2*nint:3*nint])
+            zspace_output = zspace_output[:,0:nint] + zspace_output[:,nint:2*nint] + zspace_output[:,2*nint:3*nint]
+            pixel_velocity_kms = pixel_velocity_kms[nint:2*nint]
         else:
-            tau   = tau[nint:2*nint]
-            pixel_velocity_kms = pixel_velocity_kms[nint:2*nint] 
-            densities    = densities[nint:2*nint]
-            temp_baryon_densities = temp_baryon_densities[nint:2*nint]
-            velocities   = velocities[nint:2*nint]
-            temp_baryon_velocities = temp_baryon_velocities[nint:2*nint]
-            temperatures = temperatures[nint:2*nint]
-            temp_baryon_temperatures = temp_baryon_temperatures[nint:2*nint]
-            metallicities = metallicities[nint:2*nint]
-            zspace_X_carbon = zspace_X_carbon[nint:2*nint]
-        mask = tau > 0 
-        #Normalize optical depth quantities 
-        densities[mask]     /=  tau[mask]
-        temp_baryon_densities[mask] /=  tau[mask]
-        velocities[mask]    /=  tau[mask]
-        temp_baryon_velocities[mask] /=  tau[mask]
-        temperatures[mask]  /=  tau[mask]
-        temp_baryon_temperatures[mask] /=  tau[mask]
-        metallicities[mask] /=  tau[mask]
-        zspace_X_carbon[mask] /=  tau[mask]
+            zspace_output = zspace_output[nint:2*nint]
+            pixel_velocity_kms = pixel_velocity_kms[nint:2*nint]
+        # normalize optical depth weighted quantities
+        zspace_output = np.row_stack((zspace_output[0], zspace_output[1:]/zspace_output[0]))
 
         # compute total column density
-        
-        nh_tot = np.cumsum(tau)[-1] * 1.e5 * self.pix_kms / sigma
-        spectrum = {'pixel_velocity_kms':pixel_velocity_kms,
-            'optical_depth':tau,
-            'tau_ion_column_densities':densities,
-            'tau_baryon_densities':temp_baryon_densities,
-            'tau_ion_velocities':velocities,
-            'tau_baryon_velocities':temp_baryon_velocities,
-            'tau_ion_temperatures':temperatures,
-            'tau_baryon_temperatures':temp_baryon_temperatures,
-            'tau_ion_metallicities':metallicities,
-            'tau_ion_X_Carbon':zspace_X_carbon,
-            'total_column_density':nh_tot}
-        
-        return spectrum
+        nh_tot = np.cumsum(zspace_output[0])[-1] * 1.e5 * self.pix_kms / sigma
+        return zspace_output, nh_tot
     
 
     def directgauss(self, column_density = 0, b_kms = 0, lambda0_AA=1215.67, f_value=0.4164, naturalwidth_kms=6.06076e-3,periodic=True):

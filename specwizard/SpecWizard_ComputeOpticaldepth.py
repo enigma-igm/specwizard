@@ -30,7 +30,7 @@ class ComputeOpticaldepth:
         self.ThermEff   = self.specparams['ODParams']['ThermalEffectsOff']
         self.PecVelEff  = self.specparams['ODParams']['PecVelEffectsOff']
         self.VoigtOff   = self.specparams['ODParams']['VoigtOff']
-    def MakeAllOpticaldepth(self, projected_los, DoSimIons = False):
+    def MakeAllOpticaldepth(self, projected_los, DoSimIons = False, fields_to_tau_weight=None):
         '''
             Apply MakeOpticaldepth to compute optical depths for all desired ionic transitions
 
@@ -71,7 +71,6 @@ class ComputeOpticaldepth:
              
         Ions        = self.specparams["ionparams"]["Ions"]
         projectionIW  = projection["Projection"]["Ion-weighted"]
-        projectionMW  = projection["Projection"]["Mass-weighted"]
         
         extend      = self.specparams['sightline']['ProjectionExtend']
         if extend["extend"]:
@@ -79,13 +78,13 @@ class ComputeOpticaldepth:
             extended_npix    = npix * extended_factor
             extended_vel_kms = np.arange(extended_npix) * pixel_kms
             start_indx       =  int(0.5 * npix * (extended_factor - 1))
-            for ion in projectionIW.keys():
+            """for ion in projectionIW.keys():
                 for key in ['Densities', 'Velocities', 'Temperatures']:
                     temp_array               = np.zeros_like(extended_vel_kms)
                     #nnpix = len(projectionIW[ion][key]['Value'])
                     
                     temp_array[start_indx:start_indx+npix]  = projectionIW[ion][key]['Value'].copy()
-                    projectionIW[ion][key]['Value'] = temp_array
+                    projectionIW[ion][key]['Value'] = temp_array""" # this isn't fortran, you don't need to initialize the array
 
             if 'SimIon-weighted' in projection["Projection"].keys():
                 projectionSimIon = projection["Projection"]['SimIon-weighted']
@@ -101,22 +100,23 @@ class ComputeOpticaldepth:
             sightparams['sight_kms'] = extended_vel_kms.max()
                         
                     
-        spectra  = self.WrapSpectra(Ions,projectionIW,projectionMW,sightparams,vel_mod=False,therm_mod=False)
+        spectra  = self.WrapSpectra(Ions,projectionIW,sightparams,vel_mod=False,therm_mod=False,
+                                    extra_fields_to_tau_weight=fields_to_tau_weight)
         #return spectra
         if self.ThermEff:
 
-            spectra['ThermalEffectsOff']      = self.WrapSpectra(Ions,projectionIW,projectionMW,sightparams,
+            spectra['ThermalEffectsOff']      = self.WrapSpectra(Ions,projectionIW,sightparams,
                                                                  vel_mod=False,therm_mod=True)
 
         if self.PecVelEff:
-            spectra['PeculiarVelocitiesOff']  = self.WrapSpectra(Ions,projectionIW,projectionMW,sightparams,
+            spectra['PeculiarVelocitiesOff']  = self.WrapSpectra(Ions,projectionIW,sightparams,
                                                                  vel_mod=True,therm_mod=False)
         
         if self.ThermEff and self.PecVelEff:
-            spectra['ThermalPecVelOff']       = self.WrapSpectra(Ions,projectionIW,projectionMW,sightparams,
+            spectra['ThermalPecVelOff']       = self.WrapSpectra(Ions,projectionIW,sightparams,
                                                                  vel_mod=True,therm_mod=True)
 
-        DoSimIons   = False
+        #DoSimIons   = False
         
         try:
             projectionSIW = projection["Projection"]['SimIon-weighted']
@@ -134,24 +134,24 @@ class ComputeOpticaldepth:
             intsc     = np.in1d(all_ions,SimIons)
             SimElmsIons  = np.array(Ions)[intsc]
             SimElmsIons = [tuple(SimElmsIons[i]) for i in range(len(SimElmsIons))]
-            spectra["SimIons"] =  self.WrapSpectra(SimElmsIons,projectionSIW,projectionMW,sightparams,vel_mod=False,
+            spectra["SimIons"] =  self.WrapSpectra(SimElmsIons,projectionSIW,sightparams,vel_mod=False,
                                                    therm_mod=False)
             
             if self.ThermEff:
-                spectra["SimIons_ThermalEffectsOff"]  = self.WrapSpectra(SimElmsIons,projectionSIW,projectionMW,
+                spectra["SimIons_ThermalEffectsOff"]  = self.WrapSpectra(SimElmsIons,projectionSIW,
                                                                          sightparams,vel_mod=False,therm_mod=True)
         
             if self.PecVelEff:
-                spectra['SimIons_PeculiarVelocitiesOff']  = self.WrapSpectra(SimElmsIons,projectionSIW,projectionMW,
+                spectra['SimIons_PeculiarVelocitiesOff']  = self.WrapSpectra(SimElmsIons,projectionSIW,
                                                                              sightparams,vel_mod=True,therm_mod=False)
 
             if self.ThermEff and self.PecVelEff:
-                spectra['SimIons_ThermalPecVelOff']   = self.WrapSpectra(SimElmsIons,projectionSIW,projectionMW,
+                spectra['SimIons_ThermalPecVelOff']   = self.WrapSpectra(SimElmsIons,projectionSIW,
                                                                          sightparams,vel_mod=True,therm_mod=True)
             
         return spectra
     
-    def WrapSpectra(self,Ions,projection,projection_mass,sightparams,vel_mod=False,therm_mod=False ):
+    def WrapSpectra(self,Ions,projection,sightparams,vel_mod=False,therm_mod=False, extra_fields_to_tau_weight=None):
         """
             Wrapper for the MakeOpticaldepth method.
 
@@ -167,12 +167,13 @@ class ComputeOpticaldepth:
                 spectra (dict): Dictionary containing the computed optical depths.
         """
         header     = self.header
-        spectra    = {}
+        tau_info    = {}
         vel_kms    = sightparams['vel_kms']
         vunit   = self.SetUnit(vardescription='Hubble velocity',
                                Lunit=1e5, aFact=0, hFact=0)
         for ion in Ions:
             (element_name, ion_name) = ion
+            tau_info[ion] = {}
             weight  = self.transitions[ion_name]["Mass"] * self.constants["amu"]
             lambda0 = self.transitions[ion_name]["lambda0"]
             f_value = self.transitions[ion_name]["f-value"]
@@ -181,11 +182,6 @@ class ComputeOpticaldepth:
                 nion    = self.ToCGS(header, projection[ion_name]["Densities"]) / weight
                 vion    = self.ToCGS(header, projection[ion_name]["Velocities"]) / 1e5
                 Tion    = self.ToCGS(header, projection[ion_name]["Temperatures"])
-                Zion    = projection[ion_name]["Metallicities"]['Value']
-                XCion   = projection[ion_name]["X_Carbon"]['Value']
-                dbary    = self.ToCGS(header, projection_mass["Densities"])
-                vbary     = self.ToCGS(header, projection_mass["Velocities"]) / 1e5
-                Tbary     = self.ToCGS(header, projection_mass["Temperatures"])
                 if vel_mod:
                     vions = np.zeros_like(vions)
                 if therm_mod:
@@ -193,20 +189,19 @@ class ComputeOpticaldepth:
                 spectrum = self.MakeOpticaldepth(
                     sightparams=sightparams,
                     weight=weight, lambda0=lambda0, f_value=f_value,
-                    nions=nion, dbarys=dbary, vions_kms=vion, vbarys=vbary, Tions=Tion, Tbarys=Tbary,
-                    Zions=Zion, XCions=XCion,
-                    element_name = element_name)
+                    nions=nion, vions_kms=vion, Tions=Tion,
+                    element_name = element_name, extra_fields=extra_fields_to_tau_weight)
 
-                spectra[ion]                    = spectrum
-                spectra[ion]["Mass"]            = weight
-                spectra[ion]["lambda0"]         = lambda0
-                spectra[ion]["f-value"]         = f_value
-        return spectra
+                tau_info[ion]["Tau and tau-weighted"]                  = spectrum
+                tau_info[ion]["Mass"]            = weight
+                tau_info[ion]["lambda0"]         = lambda0
+                tau_info[ion]["f-value"]         = f_value
+        return tau_info
 
     def MakeOpticaldepth(self, sightparams = [0.0,[0.0],1.0,1.0],
                      weight=1.67382335232e-24, lambda0=1215.67, f_value=0.4164, 
-                     nions = [0.0], dbarys=[0.0], vions_kms = [0.0], vbarys=[0.0], Tions = [0.0],
-                         Tbarys=[0.0], Zions= [0.0], XCions=[0.0], element_name = 'Hydrogen'):
+                     nions = [0.0], vions_kms = [0.0], Tions = [0.0], element_name = 'Hydrogen',
+                     extra_fields=None):
 
         ''' Compute optical depth for a given transition, given the ionic density, temperature and peculiar velocity
 
@@ -253,49 +248,18 @@ class ComputeOpticaldepth:
         vHubble_kms    = box_kms * np.arange(len(vions_kms)) / len(vions_kms)
         voffset_kms    = self.specparams['ODParams']['Veloffset']  #Default = 0 
         vions_tot_kms  = vions_kms + vHubble_kms + voffset_kms
-        spectrum = lines.gaussian(column_densities = ioncolumns, baryon_densities=dbarys, b_kms = bions_kms, vion_kms=vions_kms,
-                                  vion_tot_kms=vions_tot_kms, baryon_velocities=vbarys, Tions=Tions,
-                                  baryon_temperatures=Tbarys, ion_metallicities=Zions, ion_X_Carbon=XCions)
+        tau_weighted_values, tau_column_density = lines.gaussian(column_densities = ioncolumns, b_kms = bions_kms,
+                                  vion_tot_kms=vions_tot_kms, realspace_quantities=extra_fields)
 
         # Adjust Gaussian to Voigt profile? Unsure if correct though, have to check.
         """if (not self.VoigtOff) and (element_name=="Hydrogen"): # ccd commented out, probably shouldn't be here...
 #            print("this is happening")
             tau = lines.convolvelorentz(tau)"""
-        if (abs(spectrum['total_column_density'] - np.sum(column_density['Value']))/spectrum['total_column_density']) > 0.01:
+        if (abs(tau_column_density - np.sum(column_density['Value']))/tau_column_density) > 0.01:
             print("Warning: total column density from tau differs by more than 1 percent from the input column "
                   "densities.")
         # TODO eventually update the "baryon" descriptor to be "gas" instead
-        return {'Optical depths': {'Value':spectrum['optical_depth'],
-                                   'Info':self.SetUnit(vardescription="Ion optical depth (tau)", Lunit=1, aFact=0.0,
-                                                       hFact=0.0)},
-                'Densities': {'Value':spectrum['tau_ion_column_densities'],
-                              'Info':self.SetUnit(vardescription="Tau weighted ion column density",
-                                             Lunit=1.0, aFact=0.0, hFact=0.0)},
-                'Baryon Densities': {'Value':spectrum['tau_baryon_densities'],
-                                     'Info':self.SetUnit(vardescription="Tau weighted baryon mass density",
-                                                Lunit=1.0, aFact=0.0, hFact=0.0)},#baryon_density,
-                'Velocities': {'Value':spectrum['tau_ion_velocities'],
-                               'Info':self.SetUnit(vardescription="Tau weighted ion peculiar velocity",
-                                             Lunit=1e5, aFact=0.0, hFact=0.0)}, # km/s
-                'Baryon Velocities': {'Value':spectrum['tau_baryon_velocities'],
-                                      'Info':self.SetUnit(vardescription="Tau weighted baryon peculiar velocity",
-                                                          Lunit=1e5, aFact=0.0, hFact=0.0)},#baryon_velocities,
-                'Temperatures': {'Value':spectrum['tau_ion_temperatures'],
-                                 'Info':self.SetUnit(vardescription="Tau weighted ion temperature",
-                                             Lunit=1, aFact=0.0, hFact=0.0)},#temperatures,
-                'Baryon Temperatures': {'Value':spectrum['tau_baryon_temperatures'],
-                                        'Info':self.SetUnit(vardescription="Tau weighted baryon temperature",
-                                             Lunit=1, aFact=0.0, hFact=0.0)},#baryon_temperatures,
-                'Ion Metallicities': {'Value':spectrum['tau_ion_metallicities'],
-                                      'Info':self.SetUnit(vardescription="Tau weighted ion metallicity",
-                                      Lunit=1, aFact=0.0, hFact=0.0)},#ion_metallicities,
-                'Ion X_Carbon': {'Value':spectrum['tau_ion_X_Carbon'],
-                                    'Info':self.SetUnit(vardescription="Tau weighted ion carbon mass fraction",
-                                    Lunit=1, aFact=0.0, hFact=0.0)},#ion_X_Carbon,
-                'Ion Column Density': {'Value':spectrum['total_column_density'],
-                                     'Info':self.SetUnit(vardescription="Ion column density",
-                                      Lunit=1, aFact=0.0, hFact=0.0)}
-                }
+        return tau_weighted_values
 
 
     def CGSunit(self, header, variable):
