@@ -92,7 +92,7 @@ class SightLineProjection:
         
         
         boxkms = sightinfo["Boxkms"]["Value"]  # in km/s
-        box    = sightinfo["Box"]["Value"]     # cMpc/h
+        box    = sightinfo["Box"]["Value"]     # cMpc
         self.specparams['short-LOS']     = sightinfo['short-LOS']
         
         # compute extra properties for sightline
@@ -102,7 +102,7 @@ class SightLineProjection:
         npix    = np.int(sightkms / self.specparams["pixkms"]) + 1
         pixkms  = sightkms / npix
         sight   = box * los_length
-        pix     = sight / npix # in cMpc/h
+        pix     = sight / npix # in cMpc
         
         # Sight line properties
         # number of pixels of sight line and z-values of pixels
@@ -117,9 +117,10 @@ class SightLineProjection:
         # +++++ Particle properties
         # mass
         mass  = particles['Masses']['Value']
-        
+        densities = particles['Densities']['Value']
+
         # smoothing length and its inverse
-        h     = particles['SmoothingLengths']['Value']
+        h     = particles['SmoothingLengths']['Value'] # comoving Mpc
         hinv  = 1./h
         
         # Check smoothing length vs pix size 
@@ -129,7 +130,7 @@ class SightLineProjection:
         # impact parameter in units of smoothing length. Note: we impose periodic boundary conditions if periodic=True.
         dx  = self.PeriodicDist(particles['Positions']['Value'][:,0] - proj0, box,self.periodic)*hinv  # off-set from sightline in x
         dy  = self.PeriodicDist(particles['Positions']['Value'][:,1] - proj1, box,self.periodic)*hinv  # off-set from sightline in y
-        b   = np.sqrt(dx**2+dy**2)                                                         # impact parameter
+        b   = np.sqrt(dx**2+dy**2)  # impact parameter between particle and sightline in units of smoothing length
         vz  = particles['Velocities']['Value'][:,2]# peculiar velocity along sightline
             
        # mask particles that contribute
@@ -152,7 +153,6 @@ class SightLineProjection:
         rho_tot['Velocities']    = {'Value': np.zeros(npix), 'Info': particles['Velocities']['Info']}     # density-weighted peculiar velocity
         rho_tot['Temperatures']  = {'Value': np.zeros(npix), 'Info': particles['Temperatures']['Info']}   # density-weigthed temperatue
         rho_tot['Metallicities'] = {'Value': np.zeros(npix), 'Info': particles['Metallicities']['Info']}  # density-weigthed metallicity
-        rho_tot['X_Carbon'] = {'Value': np.zeros(npix), 'Info': 'SPH-smoothed carbon mass fraction'}
 
         # element densities
         rho_element             = {}
@@ -191,11 +191,12 @@ class SightLineProjection:
             rho_ion[ion]['Metallicities'] = {'Value': np.zeros(npix), 'Info': Zunit}
             rho_ion[ion]['Density Carbon'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted carbon mass density'}
             rho_ion[ion]['Density Hydrogen'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted hydrogen mass density'}
+            rho_ion[ion]['Density H I'] = {'Value': np.zeros(npix), 'Info': 'Ion-weighted hydrogen mass density'}
             rho_ion[ion]['Mass']         = self.specparams["ionparams"]["transitionparams"][ion]["Mass"]
             rho_ion[ion]['lambda0']      = self.specparams["ionparams"]["transitionparams"][ion]["lambda0"]
             rho_ion[ion]['f-value']      = self.specparams["ionparams"]["transitionparams"][ion]["f-value"]
 
-            
+
         # determine element fractions
 #        if ReadIonfrac==False:
         ParticleAbundances = {}
@@ -246,31 +247,31 @@ class SightLineProjection:
        # particle loop
         npart = len(h)
         for i in np.arange(npart):
-            if b[i] > 1: # require particle contributes to sightline, checking distance in the perpendicular plane
+            if b[i] > 1: # require particle within 1 smoothing length of sight line (perpendicular)
                 continue
             
-            zcent   = zcents[i]                                                  # z-location of particle
-            izmin   = int_zmins[i]                                               # z-coordinate of first pixel that particle contributes to (maybe negative)
-            izmax   = int_zmaxs[i]                                               # z-coordinate of first pixel that particle contributes to (maybe larger than sight line)
+            zcent   = zcents[i]  # z-location of particle in cMpc
+            izmin   = int_zmins[i]  # z index of first spectral pixel that particle contributes to (may be negative)
+            izmax   = int_zmaxs[i]  # z index of first spectral pixel that particle contributes to (may be larger than sight line)
 
             # print(zcent, self.lospart["pos"][i,2])
-            zvals    = (np.arange(izmin, izmax).astype(float)) * pix              # z-values (cMpc/h) of pixels that this particle contributes to
-            intz     = np.arange(izmin, izmax)                                    # corresponding pixel coordinates. relative index?
+            zvals    = (np.arange(izmin, izmax).astype(float)) * pix  # z-values (cMpc) of spectral pixels that this particle contributes to
+            intz     = np.arange(izmin, izmax)  # indices of spectral pixels that this particle contributes to
  
-            zvals   -= zcent                                                      # z-distance between pixel and particle
-            zvals   *= hinv[i]                                                    # z-distance beween pixel and particle in units of smoothing length
+            zvals   -= zcent   # z-distance between pixel and particle in cMpc
+            zvals   *= hinv[i]  # z-distance beween pixel and particle in units of smoothing length
             
             # restrict to pixels that are inside the smoothing length
-            mask     = (zvals**2 + b[i]**2) < 1.1 # require particle be within smoothing length, in z direction
-            zvals    = zvals[mask]                                          
-            intz     = np.array(intz[mask])
-            
+            mask     = (zvals**2 + b[i]**2) < 1.1 # require particle be within smoothing length, including z direction
+            zvals    = zvals[mask]        # z-distance in units of hinv, masked by distance
+            intz     = np.array(intz[mask])  #z-indices, masked by distance
 
             if len(zvals) == 0 or len(zvals) == 1:
                 pts   = np.array([b[i],ztable.max()])
+                # cumulative sum of kernel profile
                 diff  = interpolate.interpn((btable, ztable), table, pts, bounds_error=True, fill_value=None)
-                diff *= hinv[i]**2
-                diff /= pix 
+                diff *= hinv[i]**2  # converting back to cMpc from smoothing length units
+                diff /= pix
                 diff *= mass[i]
                 intz  = int_zcents[i]
             
@@ -302,17 +303,17 @@ class SightLineProjection:
                     mask = (intz >=0) & (intz < npix)
                     intz = intz[mask]
                     diff = diff[mask]
-                    
+                # massless_kernel = np.copy(diff) # useful if debugging things...
+
                 diff  *= mass[i]       # multiply with mass of particle                                                 
             
             mdiff  = np.copy(diff) # save mass-weighted kernel contribution
-            
-            # smoothed averages, not yet normalized by density
+
+            # mass-weighted averages, not yet normalized by smoothed mass field
             rho_tot['Densities']['Value'][intz]     += diff
             rho_tot['Velocities']['Value'][intz]    += diff * vz[i]
             rho_tot['Temperatures']['Value'][intz]  += diff * temperature[i]
             rho_tot['Metallicities']['Value'][intz] += diff * Z[i]
-            rho_tot['X_Carbon']['Value'][intz]      += diff * ParticleAbundances['Carbon']["massfraction"][i]
 
             # Densities of elements
             for element in elementnames:
@@ -330,8 +331,20 @@ class SightLineProjection:
                 rho_ion[ion]['Velocities']['Value'][intz]   += diff * vz[i]
                 rho_ion[ion]['Temperatures']['Value'][intz] += diff * temperature[i]
                 rho_ion[ion]['Metallicities']['Value'][intz] += diff * Z[i]
-                rho_ion[ion]['Density Carbon']['Value'][intz]      += diff / ComputedIonFractions[ion][i]
-                rho_ion[ion]['Density Hydrogen']['Value'][intz] += mdiff * ParticleAbundances['Hydrogen']["massfraction"][i]
+
+
+                rho_ion[ion]['Density Carbon']['Value'][intz] += ( diff *
+                                                                   ParticleAbundances['Carbon']["massfraction"][i] *
+                                                                   densities[i])
+                # ion weighted hydrogen density
+                rho_ion[ion]['Density Hydrogen']['Value'][intz] += ( diff *
+                                                                     ParticleAbundances['Hydrogen']["massfraction"][i] *
+                                                                     densities[i])
+                # ion weighted HI density
+                rho_ion[ion]['Density H I']['Value'][intz] += \
+                   ( diff * ParticleAbundances['Hydrogen']["massfraction"][i] * ComputedIonFractions['H I'][i] *
+                     densities[i])
+
             try:
                 Ions2do = np.array([ions[i][1] for i in range(len(ions))])
                 maskindx = np.where(np.in1d(Ions2do,SimIons))[0]
@@ -350,7 +363,6 @@ class SightLineProjection:
         rho_tot['Velocities']['Value'][mask]   /= rho_tot['Densities']['Value'][mask]
         rho_tot['Temperatures']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
         rho_tot['Metallicities']['Value'][mask]/= rho_tot['Densities']['Value'][mask]
-        rho_tot['X_Carbon']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
 
         for element in elementnames:
             mask = rho_element[element]['Densities']['Value'] > 0
@@ -362,9 +374,10 @@ class SightLineProjection:
             rho_ion[ion]['Velocities']['Value'][mask]    /= rho_ion[ion]['Densities']['Value'][mask]
             rho_ion[ion]['Temperatures']['Value'][mask]  /= rho_ion[ion]['Densities']['Value'][mask]
             rho_ion[ion]['Metallicities']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
-            #rho_ion[ion]['X_Carbon']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
-            # don't normalize Density Carbon and Density Hydrogen
-        
+            rho_ion[ion]['Density Carbon']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
+            rho_ion[ion]['Density Hydrogen']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
+            rho_ion[ion]['Density H I']['Value'][mask] /= rho_ion[ion]['Densities']['Value'][mask]
+
         # prepare output
         unit                   = particles["Positions"]['Info']
         unit["VarDescription"] = 'pixel size'
