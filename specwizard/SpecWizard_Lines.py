@@ -137,7 +137,12 @@ class Lines:
             zspace_output = zspace_output[nint:2*nint]
             pixel_velocity_kms = pixel_velocity_kms[nint:2*nint]
         # normalize optical depth weighted quantities
-        zspace_output = np.row_stack((zspace_output[0], zspace_output[1:]/zspace_output[0]))
+        tmp_zspace_output = np.copy(zspace_output)
+        tau = tmp_zspace_output[0]
+        nonzero_tau_mask = tau > 0
+        tmp_zspace_output = tmp_zspace_output[1:]
+        tmp_zspace_output[:,nonzero_tau_mask] /= tau[nonzero_tau_mask]
+        zspace_output = np.row_stack((tau, tmp_zspace_output))
 
         # compute total column density
         nh_tot = np.cumsum(zspace_output[0])[-1] * 1.e5 * self.pix_kms / sigma
@@ -194,15 +199,18 @@ class Lines:
             # before performing the convolution.
 
             # Create velocity bins for interpolation
+            periodic_phi = np.concatenate((phi, phi, phi))
+            periodic_v_kms = np.concatenate((self.v_kms - self.box_kms, self.v_kms, self.v_kms + self.box_kms))
+
             dv         = 1e-3                   # pixel size in km/s
-            vmin       = np.min(self.v_kms)
-            vmax       = np.max(self.v_kms)
+            vmin       = np.min(periodic_v_kms)
+            vmax       = np.max(periodic_v_kms)
             nbins      = np.int((vmax-vmin)/dv)
             dv         = (vmax-vmin)/float(nbins)
             v_convolve = vmin + np.arange(nbins) * dv 
 
             # Create lorentz profile
-            phi_fine    = np.interp(v_convolve, self.v_kms, phi)
+            phi_fine    = np.interp(v_convolve, periodic_v_kms, periodic_phi) # interpolate tau to a finer velocity grid
             width       = self.naturalwidth
             v_bins      = v_convolve - np.mean(v_convolve)              # centre Lorenz at the centre of the velocity interval
             lorentz     = (1./np.pi) * width / (v_bins**2 + width**2)   
@@ -213,8 +221,7 @@ class Lines:
             phi_fine    = convolve(phi_fine, lorentz, mode='same') / np.sum(lorentz)
 
             #
-            result      = np.interp(self.v_kms, v_convolve, phi_fine)
-
+            result      = np.interp(periodic_v_kms, v_convolve, phi_fine)[len(phi):2*len(phi)]
             return result    #
         
     def SciPyVoigt(self, b_kms=10., v0_kms=0.0, lambda0_AA=1215.67, f_value=0.4164, naturalwidth_kms=6.06076e-3, periodic=True):
