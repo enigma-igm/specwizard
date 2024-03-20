@@ -6,6 +6,7 @@ import h5py
 import re
 import numpy as np 
 import scipy.interpolate as interpolate
+from IPython import embed
 
 
 class IonTables:
