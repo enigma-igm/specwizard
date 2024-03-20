@@ -252,9 +252,10 @@ class ComputeOpticaldepth:
                                   vion_tot_kms=vions_tot_kms, realspace_quantities=extra_fields)
 
         # Adjust Gaussian to Voigt profile? Unsure if correct though, have to check.
-        """if (not self.VoigtOff) and (element_name=="Hydrogen"): # ccd commented out, probably shouldn't be here...
+        if (not self.VoigtOff) and (element_name=="Hydrogen"):
 #            print("this is happening")
-            tau = lines.convolvelorentz(tau)"""
+            tau_weighted_values[0] = lines.convolvelorentz(tau_weighted_values[0])
+
         if (abs(tau_column_density - np.sum(column_density['Value']))/tau_column_density) > 0.01:
             print("Warning: total column density from tau differs by more than 1 percent from the input column "
                   "densities.")
