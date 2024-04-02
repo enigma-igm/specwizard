@@ -924,8 +924,8 @@ class ReadSwift:
         
         
         FWHM = 0.362
-        particles['SmoothingLengths']["Value"] /= FWHM
-        print("We divide Swift's smoothing length by {0:1.3f} to convert from FWHM to extent of finite support".format(FWHM))
+        #particles['SmoothingLengths']["Value"] /= FWHM
+        #print("We divide Swift's smoothing length by {0:1.3f} to convert from FWHM to extent of finite support".format(FWHM))
 
         if (self.simtype == 'swift' and self.readIonFrac):
             print("this is happening")
