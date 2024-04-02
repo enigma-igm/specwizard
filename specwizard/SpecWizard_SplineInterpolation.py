@@ -5,7 +5,52 @@ import scipy.special as special
 import scipy.integrate as integrate
 import scipy.interpolate as interpolate
 import matplotlib.pyplot as plt
-fontsize = 20
+from scipy.integrate import tplquad
+
+
+class quartic_spline:
+    """
+        One of the kernels used in Swift (see Schaller & Borrow 2024)
+    """
+    def __init__(self, nbins=1000):
+        self.name  = 'quartic-spline-Swift'
+        self.norm  = 15625/(512*np.pi)
+        self.nbins = nbins
+        self.gamma = 2.018932 # for switching from h to H
+
+    def Info(self):
+        #
+        print("This class defines the quartic B-spline kernel which may be used in Swift.")
+
+    def Kernel(self, q):
+        # Input: q: distance between points in units of smoothing length
+        # Output: M5 B-spline kernel
+        result = np.zeros_like(q)
+
+        # outermost boundary
+        mask = (q > 1.0) # kernel is zero outside of ~2h for quartic spline
+        result[mask] = 0
+
+        # outer shell
+        mask = ( (q >= (3/5.0)) & (q <= 1.0) )
+        result[mask] = self.norm * (q[mask]**4 - 4*q[mask]**3 + 6*q[mask]**2 - 4*q[mask] + (1.0) )
+
+        # middle shell
+        mask = ( (q < (3/5.0) ) & ( q >= (1/5.0)) )
+        result[mask] = self.norm * (-4*q[mask]**4 + 8*q[mask]**3 -(24/5.0)*q[mask]**2 + (8/25.0)*q[mask] + (44/125.0) )
+
+        # inner shell
+        mask = ( q < (1/5.0) )
+        result[mask] = self.norm * (6*q[mask]**4 - (12/5.0)*q[mask]**2 + (46/125.0))
+        return result
+
+    def Spline(self):
+        # create polynomial interpolation of the 1D spline
+        qs = np.arange(0, 1, 1. / self.nbins)
+        ws = self.Kernel(qs)
+        spline = interpolate.interp1d(qs, ws, kind='linear', axis=- 1, copy=True, bounds_error=False, fill_value=0)
+        return spline
+
 
 ''' We define some oft used interpolation kernels '''
 class Bspline:
@@ -17,7 +62,7 @@ class Bspline:
         
     def Info(self):
         #
-        pass#print("This class defines the B-spline kernel of Monaghan and Lattanzio, as used in Gadget-2")
+        print("This class defines the B-spline kernel of Monaghan and Lattanzio, as used in Gadget-2")
         
     def Kernel(self,q):
         # Input: q: distance between points in units of smoothing length
@@ -80,21 +125,17 @@ class TGauss:
         ws     = self.Kernel(qs)
         spline = interpolate.interp1d(qs, ws, kind='linear', axis=- 1, copy=True, bounds_error=False, fill_value=0)
         return spline
-    
-    
-kernel = Bspline()
-kernel.Info()
-#kernel = TGauss()
+
 
 class ColumnTable:
     ''' This class creates a table to interpolate column densities computed through
         an input spherical 3D kernel '''
-    def __init__(self, kernel=kernel):
+    def __init__(self, kernel):
         self.name   = kernel.name
         self.nbins  = kernel.nbins
         self.kernel = kernel.Kernel
         self.spline = kernel.Spline()
-        
+
     def Info(self):
         #
         print("This class uses an input kernel class to create a 2D interpolation table, returning the column density as a function of impact parameter\
