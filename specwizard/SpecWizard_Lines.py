@@ -77,7 +77,7 @@ class Lines:
 
         return fnew    
 
-    def gaussian(self, column_densities = 0, b_kms = 0, vion_tot_kms=0, realspace_quantities=None):
+    def gaussian(self, column_densities = 0, b_kms = 0, vion_tot_kms=0, realspace_quantities=0):
 
                  #baryon_densities = 0, b_kms = 0, vion_kms=0, vion_tot_kms=0,
                  #baryon_velocities = 0, Tions= 0, baryon_temperatures = 0, ion_metallicities = 0,
