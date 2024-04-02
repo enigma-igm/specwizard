@@ -6,13 +6,10 @@ from specwizard.SpecWizard_Input import ReadData
 from specwizard.SpecWizard_Elements import Elements
 from specwizard.SpecWizard_IonizationBalance import IonizationBalance
 from specwizard.SpecWizard_SplineInterpolation import ColumnTable
-from specwizard.SpecWizard_SplineInterpolation import Bspline, TGauss
+from specwizard.SpecWizard_SplineInterpolation import Bspline, TGauss, quartic_spline
 from specwizard.SpecWizard_IonTables_test import IonTables
 from IPython import embed
-import specwizard.Phys
-constants = specwizard.Phys.ReadPhys()
-kernel = Bspline()
-kernel = TGauss()
+from specwizard.Phys import ReadPhys
 
 class SightLineProjection:
     
@@ -22,14 +19,21 @@ class SightLineProjection:
 
         self.kernelprojection = specparams["extra_parameters"]['Kernel']
         self.pixkms           = specparams["extra_parameters"]['pixkms'] # pixel size in km/s
+        self.constants = ReadPhys() # dictionary of certain physical constants
+
         #set kernel
         if kernelprojection=="Bspline":
-            columntable      = ColumnTable(Bspline())
-            self.kernelprojection = columntable.Column()
+            self.columntable      = ColumnTable(Bspline())
+            self.kernelprojection = self.columntable.Column()
         
         elif kernelprojection=="TGauss":
-            columntable      = ColumnTable(TGauss())
-            self.kernelprojection = columntable.Column()
+            self.columntable      = ColumnTable(TGauss())
+            self.kernelprojection = self.columntable.Column()
+
+        elif kernelprojection=="quartic_spline":
+            print('Using quartic spline')
+            self.columntable      = ColumnTable(quartic_spline())
+            self.kernelprojection = self.columntable.Column()
 
         else:
             print("ERROR "+kernelprojection+ " is not a valid kernel." + "\n" + "The valid kernels are: "
@@ -120,7 +124,7 @@ class SightLineProjection:
         densities = particles['Densities']['Value']
 
         # smoothing length and its inverse
-        h     = particles['SmoothingLengths']['Value'] # comoving Mpc
+        h     = particles['SmoothingLengths']['Value'] *2.018932 # comoving Mpc
         hinv  = 1./h
         
         # Check smoothing length vs pix size 
@@ -201,7 +205,7 @@ class SightLineProjection:
 #        if ReadIonfrac==False:
         ParticleAbundances = {}
         hydrogenfraction = self.ToCGS(header, particles["Abundances"]["Hydrogen"])                                                                  
-        nH_cgs           = self.ToCGS(header, particles['Densities']) * hydrogenfraction / constants["mH"]
+        nH_cgs           = self.ToCGS(header, particles['Densities']) * hydrogenfraction / self.constants["mH"]
         temperature      = self.ToCGS(header, particles['Temperatures'])
         Z                = self.ToCGS(header, particles['Metallicities'])
         redshift         = header["Cosmo"]["Redshift"] + np.zeros_like(temperature)
@@ -210,7 +214,7 @@ class SightLineProjection:
             ParticleAbundances[element] = {}
             ParticleAbundances[element]["massfraction"] = massfraction  # fraction of this element by mass
             ParticleAbundances[element]["element mass"] = \
-                self.specparams["elementparams"][element]["Mass"] * constants["amu"] # mass of element [g]
+                self.specparams["elementparams"][element]["Mass"] * self.constants["amu"] # mass of element [g]
 
         # determine ion fractions
         ComputedIonFractions = {}
@@ -439,5 +443,5 @@ class SightLineProjection:
         '''
         return variable["Value"] * self.CGSunit(header, variable)
 
-    def SetUnit(self, vardescription = 'text describing variable', Lunit=constants['Mpc'], aFact=1.0, hFact=1.0):
+    def SetUnit(self, vardescription, Lunit, aFact, hFact):
         return {'VarDescription': vardescription, 'CGSConversionFactor':Lunit, 'aexp-scale-exponent' :aFact, 'h-scale-exponent': hFact}
