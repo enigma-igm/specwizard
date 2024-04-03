@@ -124,7 +124,7 @@ class SightLineProjection:
         densities = particles['Densities']['Value']
 
         # smoothing length and its inverse
-        h     = particles['SmoothingLengths']['Value'] *2.018932 # comoving Mpc
+        h     = particles['SmoothingLengths']['Value'] # comoving Mpc, actually H (2*h)
         hinv  = 1./h
         
         # Check smoothing length vs pix size 
@@ -136,9 +136,6 @@ class SightLineProjection:
         dy  = self.PeriodicDist(particles['Positions']['Value'][:,1] - proj1, box,self.periodic)*hinv  # off-set from sightline in y
         b   = np.sqrt(dx**2+dy**2)  # impact parameter between particle and sightline in units of smoothing length
         vz  = particles['Velocities']['Value'][:,2]# peculiar velocity along sightline
-            
-       # mask particles that contribute
-        mask  = b < 1.1
 
         #shift_in_z is 
         shift_in_z   = zproj 
@@ -147,8 +144,6 @@ class SightLineProjection:
         int_zcents   = np.round(zcents / pix).astype(int)
         int_zmaxs    = ((particles['Positions']['Value'][:,2] + h - shift_in_z) / pix).astype(int) + 1
 
-
-        
         # interpolated values along the sight line
         
         # total density
@@ -322,7 +317,6 @@ class SightLineProjection:
             # Densities of elements
             for element in elementnames:
                 diff = mdiff * ParticleAbundances[element]["massfraction"][i]
-                #
                 rho_element[element]['Densities']['Value'][intz]    += diff
                 rho_element[element]['Velocities']['Value'][intz]   += diff * vz[i]
                 rho_element[element]['Temperatures']['Value'][intz] += diff * temperature[i]
