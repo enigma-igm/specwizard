@@ -8,7 +8,8 @@ import pyread_eagle as read_eagle
 import hydrangea as hy
 from specwizard.SimulationInputKeys import get_simkeys
 from specwizard.SpecWizard_Elements import Elements
-
+from IPython import embed
+import sys
 # physical constants in cgs units
 constants = specwizard.Phys.ReadPhys()
 
@@ -895,7 +896,8 @@ class ReadSwift:
             swif_mask.constrain_spatial(load_region)
 
             self.SW_snap = sw.load(self.fname, mask=swif_mask)
-            SmoothingL = self.SW_snap.gas.smoothing_lengths.value
+            # converting from h to H, extent of compact support, prior to the particle masking
+            SmoothingL = self.SW_snap.gas.smoothing_lengths.value * self.SW_snap.metadata.hydro_scheme['Kernel gamma']
             Positions  = self.SW_snap.gas.coordinates.value
 
 
@@ -915,16 +917,17 @@ class ReadSwift:
                      'Temperatures'     : self.read_variable(varname = groupname + '/' + groupdic['Temperatures']),
                      'Elements'         : None, 
                      'Abundances'       : None  }
-            
+
+        particles['SmoothingLengths']['Value'] = particles['SmoothingLengths']['Value'] * self.SW_snap.metadata.hydro_scheme['Kernel gamma']
+
         elements,abundances,metallicity    = self.inputfunc.set_fractions_metallicity(self.read_variable,particles)    
         
         particles['Elements']   = elements
         particles['Abundances'] = abundances
         particles['Metallicities'] = metallicity
-        
-        
+
         #FWHM = 0.362
-        #particles['SmoothingLengths']["Value"] /= FWHM
+        #particles['SmoothingLengths']["Value"] /=
         #print("We divide Swift's smoothing length by {0:1.3f} to convert from FWHM to extent of finite support".format(FWHM))
 
         if (self.simtype == 'swift' and self.readIonFrac):
