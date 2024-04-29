@@ -31,7 +31,6 @@ class SightLineProjection:
             self.kernelprojection = self.columntable.Column()
 
         elif kernelprojection=="quartic_spline":
-            print('Using quartic spline')
             self.columntable      = ColumnTable(quartic_spline())
             self.kernelprojection = self.columntable.Column()
 
@@ -103,14 +102,14 @@ class SightLineProjection:
         
         # ensure that an integer number of pixels fit into a sight line
         sightkms = boxkms * los_length # los_length is frac of sightline
-        npix    = np.int(sightkms / self.specparams["pixkms"]) + 1
+        npix    = int(sightkms / self.specparams["pixkms"]) + 1
         pixkms  = sightkms / npix
         sight   = box * los_length
         pix     = sight / npix # in cMpc
         
         # Sight line properties
         # number of pixels of sight line and z-values of pixels
-        zpix  = np.arange(-npix, 2*npix) / (3*np.float(npix))  # extend the sightline for easy periodic boundary implementation
+        zpix  = np.arange(-npix, 2*npix) / (3*float(npix))  # extend the sightline for easy periodic boundary implementation
         
         # (x,y) positions of sight line as a fraction of the box 
         proj0 = xproj = sightinfo['x-position'] * sightinfo["Box"]["Value"]
