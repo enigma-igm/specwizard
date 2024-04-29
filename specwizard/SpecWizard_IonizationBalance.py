@@ -7,16 +7,16 @@ from specwizard.SpecWizard_Elements import Elements
 import h5py
 import scipy.interpolate as interpolate
 
-elements  = [('Hydrogen',mendeleev.H.atomic_weight,'H0+'), ('Helium',mendeleev.He.atomic_weight,'He1+')]
-iondir    = './HM12Tables'
+#elements  = [('Hydrogen',mendeleev.H.atomic_weight,'H0+'), ('Helium',mendeleev.He.atomic_weight,'He1+')]
+#iondir    = './HM12Tables'
 
-ElementNames = ['Hydrogen', 'Helium', 'Oxygen', 'Carbon', 'Silicon']
-atomfile     = "/cosma/home/dphlss/tt/atom.dat"       # ascii file containing physical parameters of transitions, from VpFit
-elements     = Elements()
+#ElementNames = ['Hydrogen', 'Helium', 'Oxygen', 'Carbon', 'Silicon']
+#atomfile     = "/cosma/home/dphlss/tt/atom.dat"       # ascii file containing physical parameters of transitions, from VpFit
+#elements     = Elements()
 
 class IonizationBalance:
-    def __init__(self, iondir=iondir):
-        self.iondir    = iondir  # directory that contains cloudy interpolation tables
+    def __init__(self, iondir=''):
+        self.iondir = iondir  # directory that contains cloudy interpolation tables
         
     def Info(self):
         #

@@ -23,6 +23,7 @@ class IonTables:
     def __init__(self, specparams = None):
         self.specparams   = specparams
         self.iontable_info = specparams['ionparams']
+
         
     def ReadIonizationTable(self, ion='H I'):
         
@@ -42,6 +43,7 @@ class IonTables:
 	out : tuple
 		tuple with the contents of the ionization table for that ion.
                 if 'specwizard_cloudy' -> ((redshift,Log_temperature,Log_nH),Log_Abundance)
+                if 'hm01_cloudy' -> ((redshift,Log_temperature,Log_nH,Z/Zsol),Log_Abundance)
                 if 'ploeckinger'       -> ((redshift,Log_temperature,Log_(Z/Zsol),Log_nH),Log_Abundance)
         """     
         iontable_info = self.iontable_info
@@ -66,7 +68,36 @@ class IonTables:
             hf.close()
             #
             return ((z, LogT, LognH), LogAbundance)
-        
+
+        if iontable_info["table_type"] == 'hm01_cloudy':
+            # check whether ion exists
+            if not ion in iontable_info['ions-available']:
+                print("Ion", ion, " is not found")
+                sys.exit(-1)
+
+            el_abbr = (ion.split(' ')[0]).lower()
+            number = self.reverseRomanNumeral((ion.split(' ')[1]).strip())
+            fname = f"{iontable_info['iondir']}/{el_abbr}{number}.hdf5"
+
+            hf = h5py.File(fname, "r")
+
+            # cloudy parameters
+            try:
+                UVB = hf.attrs.get("UVB")
+                compo = hf.attrs.get("Composition")
+            except:
+                print('No UVB or Composition in the file.')
+
+            # tables
+            z = hf['redshift'][...]
+            LogT = hf['logt'][...]
+            LognH = hf['logd'][...]
+            Abundance = hf['ionbal'][...]
+            #
+            hf.close()
+            #
+            return ((z, LogT, LognH), Abundance)
+
         if iontable_info["table_type"] == 'ploeckinger':
 
             file       = iontable_info["iondir"] + '/' + iontable_info["fname"]
@@ -104,6 +135,21 @@ class IonTables:
             #
             return ((z, LogT, LognH, LogZ), LogAbundance)
         
+
+    def reverseRomanNumeral(self, s):
+        """
+        Converts roman numeral to decimal.
+
+        Parameters
+        """
+
+        roman = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10}
+        try:
+            return roman[s]
+        except KeyError:
+            print('Requested Roman numeral not found in dictionary')
+            sys.exit()
+
 
     def RomanNumeral(self, i):
         """
@@ -209,8 +255,28 @@ class IonTables:
             nHInterpol  = self.SetLimitRange(nHInterpol,table_LognHs.min(),table_LognHs.max())
             zInterpol  = redshift
             pts        = np.column_stack((zInterpol, TInterpol, nHInterpol))
-            result     = interpolate.interpn((table_z, table_LogTs, table_LognHs), table, pts, method='linear', bounds_error=False, fill_value=None)
+            result     = interpolate.interpn((table_z, table_LogTs, table_LognHs), table, pts,
+                                             method='linear', bounds_error=False, fill_value=None)
             return result
+
+        if iontable_info["table_type"] == 'hm01_cloudy':
+            # read the table
+            (table_z, table_LogTs, table_LognHs), table = self.ReadIonizationTable(ion=ion)
+            #
+            TInterpol  = np.log10(temperature)
+            Tinterpol  = self.SetLimitRange(TInterpol,table_LogTs.min(),table_LogTs.max())
+            nHInterpol = np.log10(nH_density)
+            nHInterpol  = self.SetLimitRange(nHInterpol,table_LognHs.min(),table_LognHs.max())
+            zInterpol  = redshift
+
+            # temps, densities are logged. Z is not, and is in solar units.
+            pts        = np.column_stack((zInterpol, TInterpol, nHInterpol))
+            result     = interpolate.interpn((table_z, table_LogTs, table_LognHs),
+                                             table, pts, method='linear', bounds_error=False, fill_value=None)
+            result[result>1.0] = 1.0
+            result[result<1e-33] = 1e-33  # for the logging
+            return np.log10(result)
+
         if iontable_info["table_type"] == 'ploeckinger':
 
             ((table_z, table_LogTs, table_LognHs, table_LogZs), table) = self.ReadIonizationTable(ion=ion)
@@ -227,5 +293,6 @@ class IonTables:
             Zinterpol  = np.log10(tmpZ)
             Zinterpol[Zinterpol==-34.00] = -50
             pts        = np.column_stack((zInterpol, TInterpol, Zinterpol, nHInterpol))
-            result     = interpolate.interpn((table_z, table_LogTs, table_LogZs, table_LognHs), table, pts, method='linear', bounds_error=False, fill_value=None)
+            result     = interpolate.interpn((table_z, table_LogTs, table_LogZs, table_LognHs), table, pts,
+                                             method='linear', bounds_error=False, fill_value=None)
             return result

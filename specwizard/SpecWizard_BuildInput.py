@@ -9,7 +9,8 @@ from specwizard.SpecWizard_Elements import Elements
 from specwizard.SpecWizard_IonTables import IonTables
 import yaml
 import traceback
-
+from IPython import embed
+import re
 
 class Build_Input:
     """
@@ -147,7 +148,7 @@ class Build_Input:
 
             for dkey in default_keys:
                 if sightline[dkey]==None:
-                    print("Warning! "+ dkey +" NOT found. Setting default value : "+str(sightline_default[dkey]))
+                    #print("Warning! "+ dkey +" NOT found. Setting default value : "+str(sightline_default[dkey]))
                     sightline[dkey] = sightline_default[dkey]            
                     
         elif self.specparams['file_type']['snap_type'] == 'los': 
@@ -170,7 +171,7 @@ class Build_Input:
             SFR_properties (dict) : if ``modify_particle: True`` we will deal with Star forming particles in one of two ways. If ``ignore particle = True``, will set to zero the IonizationFraction of SFR particles. If ``False`` we will set the Temperature of SFR by the indicated temperature value.  (default={'modify_particle':True,'ignore_particle': True,'Temperature [K]':1e4})  
         """
         ions_available = []
-        table_types = ['specwizard_cloudy', 'ploeckinger']
+        table_types = ['specwizard_cloudy', 'hm01_cloudy', 'ploeckinger']
         
         table_type = table_type.lower()
         if not table_type in table_types:
@@ -187,6 +188,23 @@ class Build_Input:
             except:
                 print("No files ionization tables found in directory {}".format(iondir))
                 ions_available = []
+
+        if table_type == 'hm01_cloudy':
+            try:
+                dummy_obj = IonTables(specparams=self.specparams)
+                iondir = iondir + '/' if iondir[-1] != '/' else iondir
+                files  = os.listdir(iondir)
+                ions_available   = []
+                for file in files:
+                    if ".hdf5" in file:
+                        file_prefix = file.split('.')[0]
+                        digits = int(re.findall(r'\d+', file_prefix)[0])
+                        el_abbr = re.sub(r'\d+', ' ', file_prefix).capitalize()
+                        ions_available.append(el_abbr + dummy_obj.RomanNumeral(digits))
+            except:
+                print("No files ionization tables found in directory {}".format(iondir))
+                ions_available = []
+
         if table_type == 'Ploeckinger':
             try:
                 file = iondir + '/' + fname
@@ -359,7 +377,7 @@ class Build_Input:
         Returns:
             Formated dictionary with all the input that will be use for the rest of the program.
         """
-        with open('Wizard.yml') as file:
+        with open(yml_file) as file:
             wizard_yml = yaml.load(file, Loader=yaml.FullLoader)
         
         # File type section from Wizard dictionary 
