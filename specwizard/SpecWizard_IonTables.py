@@ -31,20 +31,20 @@ class IonTables:
         This will read the ionization tables for the interpolation. The specifics of the table (path,type) are provided by
         initializing the class by providing the output from the Build_Input.
 	
-	Parameters
-	----------
-        
-        ion : str
-	      Name of ion to be calculated e.g 'HeII'
+        Parameters
+            ----------
 
-	Returns
-	-------
-        
-	out : tuple
-		tuple with the contents of the ionization table for that ion.
-                if 'specwizard_cloudy' -> ((redshift,Log_temperature,Log_nH),Log_Abundance)
-                if 'hm01_cloudy' -> ((redshift,Log_temperature,Log_nH,Z/Zsol),Log_Abundance)
-                if 'ploeckinger'       -> ((redshift,Log_temperature,Log_(Z/Zsol),Log_nH),Log_Abundance)
+                ion : str
+                  Name of ion to be calculated e.g 'HeII'
+
+        Returns
+        -------
+
+                out : tuple
+                    tuple with the contents of the ionization table for that ion.
+                            if 'specwizard_cloudy' -> ((redshift,Log_temperature,Log_nH),Log_Abundance)
+                            if 'hm01_cloudy' -> ((redshift,Log_temperature,Log_nH,Z/Zsol),Log_Abundance)
+                            if 'ploeckinger'       -> ((redshift,Log_temperature,Log_(Z/Zsol),Log_nH),Log_Abundance)
         """     
         iontable_info = self.iontable_info
         if iontable_info["table_type"] == 'specwizard_cloudy':
@@ -87,16 +87,15 @@ class IonTables:
                 compo = hf.attrs.get("Composition")
             except:
                 print('No UVB or Composition in the file.')
-
             # tables
             z = hf['redshift'][...]
             LogT = hf['logt'][...]
             LognH = hf['logd'][...]
-            Abundance = hf['ionbal'][...]
+            Abundance = hf['ionbal'][...]  # not logged
             #
             hf.close()
             #
-            return ((z, LogT, LognH), Abundance)
+            return ((LognH, LogT, z), Abundance)
 
         if iontable_info["table_type"] == 'ploeckinger':
 
@@ -189,7 +188,8 @@ class IonTables:
             for c in np.arange(k):
                 result += 'I'
         return result
-    
+
+
     def SetLimitRange(self,values,min_val,max_val):
         """
         Set values < min_val to min_val and values > min_max to max_val. This to avoid extrapolation. 
@@ -217,31 +217,24 @@ class IonTables:
     
     def IonAbundance(self, redshift=0.0, nH_density=1.0, temperature=1e4, Z=1, ion = 'H I'):
         """ 
-	Return the fractional abundance of a given ion. This done by interpolation of the ionization tables with particle data from simulations. 
- 	             
-        Parameters
-	----------
+        Return the fractional abundance of a given ion. This done by interpolation of the ionization tables with particle data from simulations.
 
-        redshift     : float
-        Redshift of the particles. 
+            Parameters
+            ----------
 
-        density:     : float
-	Proper hydrogen density of gas  particles in $\mathrm{cm}^{-3}$
+                redshift     : float Redshift of the particles.
 
-        temperature  : float 
-	Temperature of  gas particles in $\mathrm{K}$
+                density:     : float Proper hydrogen density of gas  particles in $\mathrm{cm}^{-3}$
 
-        metallicity  : float
-	Total metallicity of the particles (only used for ploeckinger tables)
-          
-	ionname      : str
-	Name of ion,e.g. 'H I' for neutral hydrogen
+                temperature  : float  Temperature of  gas particles in $\mathrm{K}$
 
-	Returns
-	-------
+                metallicity  : float Total metallicity of the particles (only used for ploeckinger tables)
 
-        out : float
-	Ion fraction $\log_{10} \mathrm{n_{ion}/n_{element}}$
+                ionname      : str= Name of ion,e.g. 'H I' for neutral hydrogen
+
+            Returns
+
+                out : float Ion fraction $\log_{10} \mathrm{n_{ion}/n_{element}}$
         """
         iontable_info = self.iontable_info
 
@@ -261,7 +254,7 @@ class IonTables:
 
         if iontable_info["table_type"] == 'hm01_cloudy':
             # read the table
-            (table_z, table_LogTs, table_LognHs), table = self.ReadIonizationTable(ion=ion)
+            (table_LognHs, table_LogTs, table_z), table = self.ReadIonizationTable(ion=ion)
             #
             TInterpol  = np.log10(temperature)
             Tinterpol  = self.SetLimitRange(TInterpol,table_LogTs.min(),table_LogTs.max())
@@ -269,9 +262,9 @@ class IonTables:
             nHInterpol  = self.SetLimitRange(nHInterpol,table_LognHs.min(),table_LognHs.max())
             zInterpol  = redshift
 
-            # temps, densities are logged. Z is not, and is in solar units.
-            pts        = np.column_stack((zInterpol, TInterpol, nHInterpol))
-            result     = interpolate.interpn((table_z, table_LogTs, table_LognHs),
+            # temps, densities are logged.
+            pts        = np.column_stack((nHInterpol, TInterpol, zInterpol))
+            result     = interpolate.interpn((table_LognHs, table_LogTs, table_z),
                                              table, pts, method='linear', bounds_error=False, fill_value=None)
             result[result>1.0] = 1.0
             result[result<1e-33] = 1e-33  # for the logging
