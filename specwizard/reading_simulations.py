@@ -212,7 +212,8 @@ class InputFunctions:
         
     def BuildLOS(self,sightline,header):
         """
-        Build LOS from full simulation box. Takes the spatial information provided by the user during BuildInput, and shape it so it can be used by     ReadEagle, swiftsim io. This to build the desire sightline.  
+        Build LOS from full simulation box. Takes the spatial information provided by the user during BuildInput,
+        and shape it so it can be used by ReadEagle, swiftsim io. This to build the desired sightline.
         
         Parameters
         ---------- 
@@ -361,7 +362,8 @@ class InputFunctions:
                 
                 IonFracs[ion] = {'Value': IonFrac['Value'],'Info': IonFrac['Info']}
         return IonFracs    
-    
+
+
     def set_fractions_metallicity(self,read_variable,particles):
         """
         Reads the element fraction and metallicities of particles. The metallicy is used in some ionization tables (e.g Ploekinger)
@@ -923,10 +925,6 @@ class ReadSwift:
         particles['Elements']   = elements
         particles['Abundances'] = abundances
         particles['Metallicities'] = metallicity
-
-        #FWHM = 0.362
-        #particles['SmoothingLengths']["Value"] /=
-        #print("We divide Swift's smoothing length by {0:1.3f} to convert from FWHM to extent of finite support".format(FWHM))
 
         if (self.simtype == 'swift' and self.readIonFrac):
             print("this is happening")
