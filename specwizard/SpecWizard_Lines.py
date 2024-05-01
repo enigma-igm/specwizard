@@ -205,7 +205,7 @@ class Lines:
             dv         = 1e-3                   # pixel size in km/s
             vmin       = np.min(periodic_v_kms)
             vmax       = np.max(periodic_v_kms)
-            nbins      = np.int((vmax-vmin)/dv)
+            nbins      = int((vmax-vmin)/dv)
             dv         = (vmax-vmin)/float(nbins)
             v_convolve = vmin + np.arange(nbins) * dv 
 
