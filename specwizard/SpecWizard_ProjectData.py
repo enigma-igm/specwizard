@@ -83,7 +83,7 @@ class SightLineProjection:
         
         return DAbund
     
-    def ProjectData(self, sightlinedata,ReadIonfrac=False):
+    def ProjectData(self, sightlinedata,ReadIonfrac=False, R13_SS=False):
         ''' Interpolate particle properties to a sight line'''
         sightinfo          = sightlinedata["SightInfo"]
         particles          = sightlinedata["Particles"]
