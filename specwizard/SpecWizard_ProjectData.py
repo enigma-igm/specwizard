@@ -304,8 +304,10 @@ class SightLineProjection:
                 # massless_kernel = np.copy(diff) # useful if debugging things...
 
                 diff  *= mass[i]       # multiply with mass of particle                                                 
-            
-            mdiff  = np.copy(diff) # save mass-weighted kernel contribution
+
+            negative_mask = diff < 0
+            mdiff  = np.copy(diff) # save mass-weighted kernel contribution.
+            mdiff[negative_mask] = 0.0  # added to avoid floating point errors
 
             # mass-weighted averages, not yet normalized by smoothed mass field
             rho_tot['Densities']['Value'][intz]     += diff
