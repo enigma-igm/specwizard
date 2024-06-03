@@ -215,7 +215,7 @@ class IonTables:
         values[values>max_val] = max_val
         return values
     
-    def IonAbundance(self, redshift=0.0, nH_density=1.0, temperature=1e4, Z=1, ion = 'H I', use_Rahmati13=False):
+    def IonAbundance(self, redshift=0.0, nH_density=1.0, temperature=1e4, Z=1, ion = 'H I'):
         """ 
         Return the fractional abundance of a given ion. This done by interpolation of the ionization tables with particle data from simulations.
 
@@ -238,29 +238,43 @@ class IonTables:
         """
         iontable_info = self.iontable_info
 
-        if ion == 'H I' and use_Rahmati13:
-            # Using the Rahmati et al. 2013 fitting formula for the neutral hydrogen fraction, rather than the tables.
-            from enigma.tpecodes._tpecodes import Gamma_ss, get_x_HI
+        if iontable_info["table_type"] == 'hm01_cloudy':
+            if (ion == 'H I') and ('no_self_shielding' in iontable_info['iondir']):  # use the rahmati shielding
+                # Using the Rahmati et al. 2013 fitting formula for the neutral hydrogen fraction, rather than the tables.
+                from enigma.tpecodes._tpecodes import Gamma_ss, get_x_HI
 
-            try:
                 # Use the HM01 HI photoionization rate
-                if iontable_info["table_type"] == 'hm01_cloudy':
-                    fname = iontable_info['iondir'] + '/h1.hdf5'
-                    hf = h5py.File(fname, "r")
-                    table_Gamma_HI = hf['header']['spectrum']['gammahi'][...] # s^-1
-                    table_redshift = hf['header']['spectrum']['redshift'][...]
-                    # TODO assumes constant redshift
-                    interpd_Gamma_HI = np.interp(redshift[0], table_redshift, table_Gamma_HI)
-                    He_fac = 1.0 + (1 - 0.76) / (2 * 0.76)  # assuming X=0.76 for hydrogen
+                fname = iontable_info['iondir'] + '/h1.hdf5'
+                hf = h5py.File(fname, "r")
+                table_Gamma_HI = hf['header']['spectrum']['gammahi'][...]  # s^-1
+                table_redshift = hf['header']['spectrum']['redshift'][...]
+                # TODO assumes constant redshift
+                interpd_Gamma_HI = np.interp(redshift[0], table_redshift, table_Gamma_HI)
+                He_fac = 1.0 + (1 - 0.76) / (2 * 0.76)  # assuming X=0.76 for hydrogen
 
-                    # attenuated HI photoionization rate. Array as function of nH_density.
-                    Gamma_phot = np.array([Gamma_ss(interpd_Gamma_HI/(1e-12), x) for x in nH_density])
-                    x_HI = np.array([get_x_HI(He_fac, x[0], x[1], x[2]) for x in zip(Gamma_phot, nH_density, temperature)])
+                # attenuated HI photoionization rate. Array as function of nH_density.
+                Gamma_phot = np.array([Gamma_ss(interpd_Gamma_HI / (1e-12), x) for x in nH_density])
+                x_HI = np.array(
+                    [get_x_HI(He_fac, x[0], x[1], x[2]) for x in zip(Gamma_phot, nH_density, temperature)])
 
-                    return np.log10(x_HI)
-            except:
-                embed(header='\nCould not use Rahmati+2013 for HI ionization state. Using the unshielded tables '
-                             'instead.\n')
+                return np.log10(x_HI)
+
+            else:  # path contains '/self_shielding/' or the ion is not H I
+                # read the table
+                (table_LognHs, table_LogTs, table_z), table = self.ReadIonizationTable(ion=ion)
+                TInterpol = np.log10(temperature)
+                Tinterpol = self.SetLimitRange(TInterpol, table_LogTs.min(), table_LogTs.max())
+                nHInterpol = np.log10(nH_density)
+                nHInterpol = self.SetLimitRange(nHInterpol, table_LognHs.min(), table_LognHs.max())
+                zInterpol = redshift
+
+                # temps, densities are logged.
+                pts = np.column_stack((nHInterpol, TInterpol, zInterpol))
+                result = interpolate.interpn((table_LognHs, table_LogTs, table_z),
+                                             table, pts, method='linear', bounds_error=False, fill_value=None)
+                result[result > 1.0] = 1.0
+                result[result < 1e-33] = 1e-33  # for the logging
+                return np.log10(result)
 
         if iontable_info["table_type"] == 'specwizard_cloudy':
             # read the table
@@ -275,23 +289,6 @@ class IonTables:
             result     = interpolate.interpn((table_z, table_LogTs, table_LognHs), table, pts,
                                              method='linear', bounds_error=False, fill_value=None)
             return result
-
-        if iontable_info["table_type"] == 'hm01_cloudy':
-            # read the table
-            (table_LognHs, table_LogTs, table_z), table = self.ReadIonizationTable(ion=ion)
-            TInterpol  = np.log10(temperature)
-            Tinterpol  = self.SetLimitRange(TInterpol,table_LogTs.min(),table_LogTs.max())
-            nHInterpol = np.log10(nH_density)
-            nHInterpol  = self.SetLimitRange(nHInterpol,table_LognHs.min(),table_LognHs.max())
-            zInterpol  = redshift
-
-            # temps, densities are logged.
-            pts        = np.column_stack((nHInterpol, TInterpol, zInterpol))
-            result     = interpolate.interpn((table_LognHs, table_LogTs, table_z),
-                                             table, pts, method='linear', bounds_error=False, fill_value=None)
-            result[result>1.0] = 1.0
-            result[result<1e-33] = 1e-33  # for the logging
-            return np.log10(result)
 
         if iontable_info["table_type"] == 'ploeckinger':
 
