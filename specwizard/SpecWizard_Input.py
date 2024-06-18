@@ -1,4 +1,3 @@
-
 import numpy as np
 import specwizard.Phys
 import importlib
@@ -9,18 +8,12 @@ from specwizard.reading_simulations import *
 Phys = importlib.reload(specwizard.Phys)
 from specwizard.SimulationInputKeys import get_simkeys
 
-# physical constants in cgs units
-constants  = Phys.ReadPhys()
-
-
-wizard = {}
-
 class ReadData:
     '''
     Read SPH particles from Eagle (Gadget), Hydrangea(C-Eagle) or Swift output
     input: Wizardparamas(output from running SpecWizard_BuildInput)
     '''
-    def __init__(self, wizard=wizard):
+    def __init__(self, wizard):
         self.wizard = wizard
         self.fdir       = wizard["snapshot_params"]["directory"]
         self.fname      = self.fdir + '/' + wizard["snapshot_params"]["file"]
