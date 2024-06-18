@@ -694,6 +694,7 @@ class ReadEagle:
                      'Positions'        : self.read_variable(varname = groupname + '/' + groupdic['Positions']),
                      'Velocities'       : self.read_variable(varname = groupname + '/' + groupdic['Velocities']),
                      'Temperatures'     : self.read_variable(varname = groupname + '/' + groupdic['Temperatures']),
+                     'GroupNumber'      : self.RE_snap.read_dataset(0,'GroupNumber')[self.los_mask],
                      'Elements'         : None, 
                      'Abundances'       : None  }
             
