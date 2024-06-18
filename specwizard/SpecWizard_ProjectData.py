@@ -139,7 +139,7 @@ class SightLineProjection:
         #shift_in_z is 
         shift_in_z   = zproj 
         int_zmins    = ((particles['Positions']['Value'][:,2] - h -shift_in_z) / pix).astype(int) - 1
-        zcents       = particles['Positions']['Value'][:,2] - shift_in_z # does this reposition everything to be at zero?
+        zcents       = particles['Positions']['Value'][:,2] - shift_in_z
         int_zcents   = np.round(zcents / pix).astype(int)
         int_zmaxs    = ((particles['Positions']['Value'][:,2] + h - shift_in_z) / pix).astype(int) + 1
 
@@ -151,6 +151,7 @@ class SightLineProjection:
         rho_tot['Velocities']    = {'Value': np.zeros(npix), 'Info': particles['Velocities']['Info']}     # density-weighted peculiar velocity
         rho_tot['Temperatures']  = {'Value': np.zeros(npix), 'Info': particles['Temperatures']['Info']}   # density-weigthed temperatue
         rho_tot['Metallicities'] = {'Value': np.zeros(npix), 'Info': particles['Metallicities']['Info']}  # density-weigthed metallicity
+        rho_tot['FOF Flag'] = {'Value': np.zeros(npix), 'Info': 'FOF Flag (1=assigned, 0=not assigned)'}
 
         # element densities
         rho_element             = {}
@@ -202,6 +203,11 @@ class SightLineProjection:
         nH_cgs           = self.ToCGS(header, particles['Densities']) * hydrogenfraction / self.constants["mH"]
         temperature      = self.ToCGS(header, particles['Temperatures'])
         Z                = self.ToCGS(header, particles['Metallicities'])
+        GroupNumber      = particles['GroupNumber']
+        FOF_mask = (GroupNumber<int(2**30))
+        GroupNumber[FOF_mask] = 1  # particles with an FOF assignment
+        GroupNumber[~FOF_mask] = 0  # particles without an FOF assignment
+
         redshift         = header["Cosmo"]["Redshift"] + np.zeros_like(temperature)
         for element in elementnames:
             massfraction   = self.ToCGS(header, particles["Abundances"][element])
@@ -271,7 +277,7 @@ class SightLineProjection:
                 diff *= hinv[i]**2  # converting back to cMpc from smoothing length units
                 diff /= pix
                 diff *= mass[i]
-                intz  = int_zcents[i]
+                intz  = int_zcents[i] + npix if intz < 0 else int_zcents[i] - npix
             
             else:
                 bvals    = np.zeros_like(zvals) + b[i]                                # impact parameter in units of smoothing length
@@ -314,6 +320,7 @@ class SightLineProjection:
             rho_tot['Velocities']['Value'][intz]    += diff * vz[i]
             rho_tot['Temperatures']['Value'][intz]  += diff * temperature[i]
             rho_tot['Metallicities']['Value'][intz] += diff * Z[i]
+            rho_tot['FOF Flag']['Value'][intz] += diff * GroupNumber[i]  # FOF flag weighted by total density
 
             # Densities of elements
             for element in elementnames:
@@ -330,8 +337,6 @@ class SightLineProjection:
                 rho_ion[ion]['Velocities']['Value'][intz]   += diff * vz[i]
                 rho_ion[ion]['Temperatures']['Value'][intz] += diff * temperature[i]
                 rho_ion[ion]['Metallicities']['Value'][intz] += diff * Z[i]
-
-
                 rho_ion[ion]['Density Carbon']['Value'][intz] += ( diff *
                                                                    ParticleAbundances['Carbon']["massfraction"][i] *
                                                                    densities[i])
@@ -362,6 +367,7 @@ class SightLineProjection:
         rho_tot['Velocities']['Value'][mask]   /= rho_tot['Densities']['Value'][mask]
         rho_tot['Temperatures']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
         rho_tot['Metallicities']['Value'][mask]/= rho_tot['Densities']['Value'][mask]
+        rho_tot['FOF Flag']['Value'][mask] /= rho_tot['Densities']['Value'][mask]
 
         for element in elementnames:
             mask = rho_element[element]['Densities']['Value'] > 0
